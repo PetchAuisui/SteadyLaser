@@ -1,0 +1,121 @@
+import AppKit
+import QuartzCore
+
+/// Developer helpers, run from the command line instead of the menu bar app:
+///   SteadyLaser --snapshot out.png   render every style/color to a PNG
+///   SteadyLaser --selftest           print One Euro filter jitter / lag numbers
+@MainActor
+enum DevTools {
+    static func snapshot(to path: String) {
+        let cell = CGSize(width: 220, height: 170)
+        let styles = LaserStyle.allCases
+        let backgrounds: [NSColor] = [NSColor(white: 0.96, alpha: 1), NSColor(white: 0.12, alpha: 1)]
+        let colors: [LaserColor] = [.red, .green]
+        let size = CGSize(width: cell.width * CGFloat(styles.count), height: cell.height * CGFloat(backgrounds.count * colors.count))
+        let scale: CGFloat = 2
+        let now: CFTimeInterval = 100
+
+        let root = CALayer()
+        root.frame = CGRect(origin: .zero, size: size)
+        root.backgroundColor = NSColor.black.cgColor
+
+        var row = 0
+        for bg in backgrounds {
+            for color in colors {
+                for (col, style) in styles.enumerated() {
+                    let frame = CGRect(x: CGFloat(col) * cell.width, y: CGFloat(row) * cell.height, width: cell.width, height: cell.height)
+                    let back = CALayer()
+                    back.frame = frame
+                    back.backgroundColor = bg.cgColor
+                    root.addSublayer(back)
+
+                    let r = LaserRenderer()
+                    r.configure(style: style, radius: LaserSize.medium.radius, color: color.color, scale: scale)
+                    back.addSublayer(r.container)
+
+                    // A fake recent path curving in from the lower left.
+                    let end = CGPoint(x: cell.width * 0.62, y: cell.height * 0.55)
+                    var trail: [TrailPoint] = []
+                    for i in 0...14 {
+                        let f = CGFloat(i) / 14
+                        let p = CGPoint(x: end.x - 95 * (1 - f), y: end.y - 40 * (1 - f) * (1 - f))
+                        trail.append(TrailPoint(point: p, time: now - 0.12 * Double(1 - f)))
+                    }
+                    r.update(point: end, opacity: 1, trail: trail, now: now, trailDuration: 0.12)
+                }
+                row += 1
+            }
+        }
+
+        guard let ctx = CGContext(
+            data: nil, width: Int(size.width * scale), height: Int(size.height * scale),
+            bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+        ctx.scaleBy(x: scale, y: scale)
+        root.render(in: ctx)
+        guard let image = ctx.makeImage(),
+              let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { return }
+        try? png.write(to: URL(fileURLWithPath: path))
+        print("wrote \(path)")
+    }
+
+    /// Renders the "set laser button" panel content offscreen, with the hint visible.
+    static func snapshotCapturePanel(to path: String) {
+        let capture = ButtonCapture()
+        let view = capture.makeContent()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
+        window.title = "ตั้งปุ่มเลเซอร์"
+        window.appearance = NSAppearance(named: .aqua)
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor(white: 0.93, alpha: 1).cgColor
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.setContentSize(view.fittingSize)
+        view.layoutSubtreeIfNeeded()
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        print("wrote \(path) size \(view.bounds.size)")
+    }
+
+    /// Simulates a hand-held air mouse at 120 Hz: holding still with ±3 px
+    /// tremor, then sweeping at 1500 px/s. Prints how much jitter survives the
+    /// filter and how far the dot trails behind during the sweep.
+    static func selfTest() {
+        var rng = SystemRandomNumberGenerator()
+        let dt = 1.0 / 120.0
+        for stability in Stability.allCases {
+            var f = OneEuroFilter2D(minCutoff: stability.minCutoff, beta: stability.beta)
+            var t = 0.0
+
+            // 2 s holding still around (500, 500) with integer-pixel tremor.
+            var inSpread = 0.0, outSpread = 0.0
+            var prevIn = CGPoint(x: 500, y: 500), prevOut = prevIn
+            for i in 0..<240 {
+                let p = CGPoint(x: 500 + Double(Int.random(in: -3...3, using: &rng)),
+                                y: 500 + Double(Int.random(in: -3...3, using: &rng)))
+                let o = f.filter(p, time: t)
+                if i > 30 {
+                    inSpread += hypot(p.x - prevIn.x, p.y - prevIn.y)
+                    outSpread += hypot(o.x - prevOut.x, o.y - prevOut.y)
+                }
+                prevIn = p; prevOut = o; t += dt
+            }
+
+            // 0.5 s sweep at 1500 px/s.
+            var lag = 0.0
+            var x = 500.0
+            for _ in 0..<60 {
+                x += 1500 * dt
+                let o = f.filter(CGPoint(x: x, y: 500), time: t)
+                lag = x - o.x
+                t += dt
+            }
+            print(String(format: "%-7@ jitter per frame: raw %.2f px -> laser %.2f px (%.0f%% less) | lag at 1500 px/s: %.1f px (%.1f ms)",
+                         stability.rawValue as NSString, inSpread / 209, outSpread / 209,
+                         100 * (1 - outSpread / inSpread), lag, lag / 1500 * 1000))
+        }
+    }
+}

@@ -1,0 +1,244 @@
+import AppKit
+import Carbon.HIToolbox
+import ServiceManagement
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let settings = Settings.shared
+    private let controller = LaserController()
+    private let capture = ButtonCapture()
+    private var statusItem: NSStatusItem!
+
+    private var laserButtonHotKey: UInt32?
+    private var laserButtonMonitors: [Any] = []
+    private var laserButtonError: String?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = statusItem.button {
+            let image = NSImage(systemSymbolName: "smallcircle.filled.circle", accessibilityDescription: "Steady Laser")
+            image?.isTemplate = true
+            button.image = image
+        }
+
+        settings.onChange = { [weak self] in
+            guard let self else { return }
+            self.refreshMenu()
+            self.controller.settingsChanged()
+        }
+
+        // ⌃⌥L toggles the laser on/off.
+        HotKeyCenter.shared.register(keyCode: kVK_ANSI_L, modifiers: controlKey | optionKey) { [weak self] in
+            guard let self else { return }
+            self.settings.mode = (self.settings.mode == .off) ? self.settings.lastActiveMode : .off
+        }
+
+        bindLaserButton()
+        refreshMenu()
+        controller.start()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controller.stop()
+    }
+
+    // MARK: - Laser button on the remote
+
+    private func unbindLaserButton() {
+        if let id = laserButtonHotKey { HotKeyCenter.shared.unregister(id) }
+        laserButtonHotKey = nil
+        laserButtonMonitors.forEach(NSEvent.removeMonitor)
+        laserButtonMonitors.removeAll()
+        controller.setButtonHeld(false)
+    }
+
+    private func bindLaserButton() {
+        unbindLaserButton()
+        laserButtonError = nil
+        guard let binding = settings.laserButton else { return }
+
+        switch binding {
+        case let .key(code, modifiers, _):
+            laserButtonHotKey = HotKeyCenter.shared.register(
+                keyCode: code, modifiers: modifiers,
+                onPress: { [weak self] in self?.controller.setButtonHeld(true) },
+                onRelease: { [weak self] in self?.controller.setButtonHeld(false) }
+            )
+            if laserButtonHotKey == nil {
+                laserButtonError = "ปุ่มนี้ถูกแอปอื่นจองไว้ ลองตั้งปุ่มใหม่"
+            }
+
+        case let .mouse(button):
+            let handler: (NSEvent) -> Void = { [weak self] e in
+                guard e.buttonNumber == button else { return }
+                MainActor.assumeIsolated { self?.controller.setButtonHeld(e.type == .otherMouseDown) }
+            }
+            let mask: NSEvent.EventTypeMask = [.otherMouseDown, .otherMouseUp]
+            if let g = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler) {
+                laserButtonMonitors.append(g)
+            }
+            if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { handler($0); return $0 }) {
+                laserButtonMonitors.append(l)
+            }
+        }
+    }
+
+    @objc private func learnLaserButton(_ sender: Any?) {
+        startLearning(switchToHold: settings.mode == .off)
+    }
+
+    private func startLearning(switchToHold: Bool) {
+        // Free the old key while learning, or the hotkey would swallow it.
+        unbindLaserButton()
+        capture.begin { [weak self] result in
+            guard let self else { return }
+            if let result {
+                self.settings.laserButton = result
+                if switchToHold { self.settings.mode = .hold }
+            }
+            self.bindLaserButton()
+            self.refreshMenu()
+        }
+    }
+
+    @objc private func clearLaserButton(_ sender: Any?) {
+        settings.laserButton = nil
+        bindLaserButton()
+        refreshMenu()
+    }
+
+    // MARK: - Launch at login
+
+    private var launchesAtLogin: Bool { SMAppService.mainApp.status == .enabled }
+
+    @objc private func toggleLaunchAtLogin(_ sender: Any?) {
+        do {
+            if launchesAtLogin {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "ตั้งค่าเปิดอัตโนมัติไม่สำเร็จ"
+            alert.informativeText = error.localizedDescription
+            NSApp.activate()
+            alert.runModal()
+        }
+        if SMAppService.mainApp.status == .requiresApproval {
+            SMAppService.openSystemSettingsLoginItems()
+        }
+        refreshMenu()
+    }
+
+    // MARK: - Menu
+
+    private func refreshMenu() {
+        statusItem.menu = buildMenu()
+    }
+
+    private func buildMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        menu.addItem(label("Steady Laser"))
+        menu.addItem(.separator())
+
+        menu.addItem(label("โหมดเลเซอร์"))
+        for m in LaserMode.allCases {
+            let item = choice(m.title, m.rawValue, selected: m == settings.mode, #selector(setMode(_:)))
+            if m == .hold && settings.laserButton == nil { item.title += " (ตั้งปุ่มก่อน)" }
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+
+        menu.addItem(label("ปุ่มเลเซอร์บนรีโมต: " + (settings.laserButton?.title ?? "ยังไม่ได้ตั้ง")))
+        if let laserButtonError { menu.addItem(label("⚠︎ " + laserButtonError)) }
+        menu.addItem(action(settings.laserButton == nil ? "ตั้งปุ่มเลเซอร์…" : "เปลี่ยนปุ่มเลเซอร์…", #selector(learnLaserButton(_:))))
+        if settings.laserButton != nil {
+            menu.addItem(action("ล้างปุ่มเลเซอร์", #selector(clearLaserButton(_:))))
+        }
+        menu.addItem(.separator())
+
+        menu.addItem(submenu("รูปแบบ", LaserStyle.allCases.map {
+            choice($0.title, $0.rawValue, selected: $0 == settings.style, #selector(setStyle(_:)))
+        }))
+        menu.addItem(submenu("สี", LaserColor.allCases.map {
+            let item = choice($0.title, $0.rawValue, selected: $0 == settings.color, #selector(setColor(_:)))
+            item.image = swatch($0.color)
+            return item
+        }))
+        menu.addItem(submenu("ขนาด", LaserSize.allCases.map {
+            choice($0.title, $0.rawValue, selected: $0 == settings.size, #selector(setSize(_:)))
+        }))
+        menu.addItem(submenu("ความนิ่ง", Stability.allCases.map {
+            choice($0.title, $0.rawValue, selected: $0 == settings.stability, #selector(setStability(_:)))
+        }))
+
+        let hide = action("ซ่อนเคอร์เซอร์ตอนเลเซอร์แสดง", #selector(toggleHideCursor(_:)))
+        hide.state = settings.hideCursor ? .on : .off
+        menu.addItem(hide)
+
+        let login = action("เปิดอัตโนมัติตอนเข้าเครื่อง", #selector(toggleLaunchAtLogin(_:)))
+        login.state = launchesAtLogin ? .on : .off
+        menu.addItem(login)
+
+        menu.addItem(.separator())
+        menu.addItem(label("เปิด/ปิดเลเซอร์: ⌃⌥L"))
+        let quit = action("ออก", #selector(quit(_:)))
+        quit.keyEquivalent = "q"
+        menu.addItem(quit)
+        return menu
+    }
+
+    private func label(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    private func action(_ title: String, _ selector: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    private func choice(_ title: String, _ value: String, selected: Bool, _ selector: Selector) -> NSMenuItem {
+        let item = action(title, selector)
+        item.representedObject = value
+        item.state = selected ? .on : .off
+        return item
+    }
+
+    private func submenu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
+        let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let sub = NSMenu(title: title)
+        items.forEach { sub.addItem($0) }
+        parent.submenu = sub
+        return parent
+    }
+
+    private func swatch(_ color: NSColor) -> NSImage {
+        NSImage(size: NSSize(width: 12, height: 12), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
+    }
+
+    private func raw(_ sender: NSMenuItem) -> String { sender.representedObject as? String ?? "" }
+
+    @objc private func setMode(_ sender: NSMenuItem) {
+        guard let v = LaserMode(rawValue: raw(sender)) else { return }
+        if v == .hold && settings.laserButton == nil {
+            startLearning(switchToHold: true)   // the mode switches once a button is learned
+            return
+        }
+        settings.mode = v
+    }
+    @objc private func setStyle(_ sender: NSMenuItem) { if let v = LaserStyle(rawValue: raw(sender)) { settings.style = v } }
+    @objc private func setColor(_ sender: NSMenuItem) { if let v = LaserColor(rawValue: raw(sender)) { settings.color = v } }
+    @objc private func setSize(_ sender: NSMenuItem) { if let v = LaserSize(rawValue: raw(sender)) { settings.size = v } }
+    @objc private func setStability(_ sender: NSMenuItem) { if let v = Stability(rawValue: raw(sender)) { settings.stability = v } }
+    @objc private func toggleHideCursor(_ sender: NSMenuItem) { settings.hideCursor.toggle() }
+    @objc private func quit(_ sender: NSMenuItem) { NSApp.terminate(nil) }
+}
