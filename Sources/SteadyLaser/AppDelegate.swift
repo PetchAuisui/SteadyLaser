@@ -51,7 +51,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         laserButtonMonitors.forEach(NSEvent.removeMonitor)
         laserButtonMonitors.removeAll()
         modifierButtonDown = false
+        pendingPress?.cancel()
+        pendingPress = nil
+        annotating = false
+        skipRelease = false
         controller.resetLaserButton()
+    }
+
+    // MARK: Modifier button (Norwii pointer key)
+    //
+    // The Norwii pointer key, held in its PowerPoint-laser mode, sends ⌃L when
+    // the hold starts and ⌃A when it ends. Its annotate key sends ⌃P, a left
+    // mouse press for as long as it's held, then ⌃A. Without Input Monitoring
+    // only the Control part shows, so a Control tap turns the laser on 0.1 s
+    // later unless the remote's own mouse press comes first (annotate, skipped
+    // along with its closing ⌃A), and the next tap turns it off.
+
+    private var pendingPress: DispatchWorkItem?
+    private var annotating = false
+    private var skipRelease = false
+    private let annotateWindow: TimeInterval = 0.1
+
+    private func modifierButton(down: Bool) {
+        guard down != modifierButtonDown else { return }
+        modifierButtonDown = down
+        if down {
+            if annotating {
+                annotating = false
+                skipRelease = true
+            } else if controller.buttonHeld {
+                controller.laserButtonPressed()   // turns it off right away
+            } else {
+                let work = DispatchWorkItem { [weak self] in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.pendingPress = nil
+                        self.controller.laserButtonPressed()
+                        // A tap already came back up: let the controller latch it.
+                        if !self.modifierButtonDown { self.controller.laserButtonReleased() }
+                    }
+                }
+                pendingPress = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + annotateWindow, execute: work)
+            }
+        } else if skipRelease {
+            skipRelease = false
+        } else if pendingPress == nil {
+            controller.laserButtonReleased()
+        }
+    }
+
+    private func remoteMouseDown() {
+        guard let pending = pendingPress else { return }
+        pending.cancel()
+        pendingPress = nil
+        annotating = true
     }
 
     /// Watches `mask` both in other apps (global) and in this one (local).
@@ -67,7 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func bindLaserButton() {
         unbindLaserButton()
         laserButtonError = nil
-        guard let binding = settings.laserButton else { return }
+        // No button set: use the Norwii pointer key (⌃L … ⌃A from any Norwii remote).
+        let binding = settings.laserButton ?? LaserButton.norwiiPointer
 
         switch binding {
         case let .key(code, modifiers, _):
@@ -81,18 +136,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
         case let .modifier(code, device):
-            // Not a hotkey: the key still reaches other apps, and a bare
-            // Control tap does nothing there.
+            // Not a hotkey: the keys still reach other apps untouched.
             monitor(.flagsChanged) { [weak self] e in
                 guard Int(e.keyCode) == code, let down = LaserButton.modifierIsDown(e) else { return }
                 MainActor.assumeIsolated {
-                    guard let self else { return }
-                    // Only the device it was learned from: the remote's Control,
-                    // not the Mac keyboard's. Unknown senders are let through.
-                    if let device, let from = InputDevice.of(e), from != device { return }
-                    guard down != self.modifierButtonDown else { return }
-                    self.modifierButtonDown = down
-                    if down { self.controller.laserButtonPressed() } else { self.controller.laserButtonReleased() }
+                    // Only the remote it was learned from, not the Mac keyboard's
+                    // Control. Unknown senders are let through.
+                    if let device, let from = InputDevice.of(e), !from.isSameMaker(as: device) { return }
+                    self?.modifierButton(down: down)
+                }
+            }
+            if let device {
+                monitor(.leftMouseDown) { [weak self] e in
+                    MainActor.assumeIsolated {
+                        guard let from = InputDevice.of(e), from.isSameMaker(as: device) else { return }
+                        self?.remoteMouseDown()
+                    }
                 }
             }
 
@@ -171,12 +230,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(label("โหมดเลเซอร์"))
         for m in LaserMode.allCases {
             let item = choice(m.title, m.rawValue, selected: m == settings.mode, #selector(setMode(_:)))
-            if m == .hold && settings.laserButton == nil { item.title += " (ตั้งปุ่มก่อน)" }
             menu.addItem(item)
         }
         menu.addItem(.separator())
 
-        menu.addItem(label("ปุ่มเลเซอร์บนรีโมต: " + (settings.laserButton?.title ?? "ยังไม่ได้ตั้ง")))
+        menu.addItem(label("ปุ่มเลเซอร์บนรีโมต: " + (settings.laserButton?.title ?? "ปุ่ม pointer ของรีโมต Norwii")))
         if let laserButtonError { menu.addItem(label("⚠︎ " + laserButtonError)) }
         menu.addItem(action(settings.laserButton == nil ? "ตั้งปุ่มเลเซอร์…" : "เปลี่ยนปุ่มเลเซอร์…", #selector(learnLaserButton(_:))))
         if settings.laserButton != nil {
@@ -254,10 +312,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func setMode(_ sender: NSMenuItem) {
         guard let v = LaserMode(rawValue: raw(sender)) else { return }
-        if v == .hold && settings.laserButton == nil {
-            startLearning(switchToHold: true)   // the mode switches once a button is learned
-            return
-        }
         settings.mode = v
     }
     @objc private func setStyle(_ sender: NSMenuItem) { if let v = LaserStyle(rawValue: raw(sender)) { settings.style = v } }

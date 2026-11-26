@@ -73,9 +73,9 @@ final class LaserController {
     private var pressHidLaser = false
 
     /// A press shorter than this latches the laser on until the next press;
-    /// a longer one is "hold to show". The Norwii pointer button sends a ~20 ms
-    /// Control tap however long it's held, so it always latches:
-    /// press = show, press again = hide.
+    /// a longer one is "hold to show". Remotes send short taps however long a
+    /// key is held (the Norwii pointer sends ⌃L when a hold starts and ⌃A when
+    /// it ends), so their taps always latch, and the next one turns it off.
     private let tapLength: CFTimeInterval = 0.3
 
     func laserButtonPressed() {

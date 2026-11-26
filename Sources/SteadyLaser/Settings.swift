@@ -7,7 +7,7 @@ enum LaserMode: String, CaseIterable {
         switch self {
         case .off: "ปิด"
         case .moving: "แสดงเมื่อขยับเมาส์"
-        case .hold: "แสดงเมื่อกดปุ่มเลเซอร์ (กดอีกครั้งเพื่อซ่อน)"
+        case .hold: "แสดงเมื่อกดปุ่มเลเซอร์บนรีโมต"
         case .always: "เปิดตลอด"
         }
     }
