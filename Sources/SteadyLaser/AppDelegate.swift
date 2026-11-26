@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var laserButtonHotKey: UInt32?
     private var laserButtonMonitors: [Any] = []
     private var laserButtonError: String?
+    private var modifierButtonDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -49,7 +50,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         laserButtonHotKey = nil
         laserButtonMonitors.forEach(NSEvent.removeMonitor)
         laserButtonMonitors.removeAll()
-        controller.setButtonHeld(false)
+        modifierButtonDown = false
+        controller.resetLaserButton()
+    }
+
+    /// Watches `mask` both in other apps (global) and in this one (local).
+    private func monitor(_ mask: NSEvent.EventTypeMask, _ handler: @escaping (NSEvent) -> Void) {
+        if let g = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler) {
+            laserButtonMonitors.append(g)
+        }
+        if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { handler($0); return $0 }) {
+            laserButtonMonitors.append(l)
+        }
     }
 
     private func bindLaserButton() {
@@ -61,30 +73,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case let .key(code, modifiers, _):
             laserButtonHotKey = HotKeyCenter.shared.register(
                 keyCode: code, modifiers: modifiers,
-                onPress: { [weak self] in self?.controller.setButtonHeld(true) },
-                onRelease: { [weak self] in self?.controller.setButtonHeld(false) }
+                onPress: { [weak self] in self?.controller.laserButtonPressed() },
+                onRelease: { [weak self] in self?.controller.laserButtonReleased() }
             )
             if laserButtonHotKey == nil {
                 laserButtonError = "ปุ่มนี้ถูกแอปอื่นจองไว้ ลองตั้งปุ่มใหม่"
             }
 
+        case let .modifier(code, device):
+            // Not a hotkey: the key still reaches other apps, and a bare
+            // Control tap does nothing there.
+            monitor(.flagsChanged) { [weak self] e in
+                guard Int(e.keyCode) == code, let down = LaserButton.modifierIsDown(e) else { return }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    // Only the device it was learned from: the remote's Control,
+                    // not the Mac keyboard's. Unknown senders are let through.
+                    if let device, let from = InputDevice.of(e), from != device { return }
+                    guard down != self.modifierButtonDown else { return }
+                    self.modifierButtonDown = down
+                    if down { self.controller.laserButtonPressed() } else { self.controller.laserButtonReleased() }
+                }
+            }
+
         case let .mouse(button):
-            let handler: (NSEvent) -> Void = { [weak self] e in
+            monitor([.otherMouseDown, .otherMouseUp]) { [weak self] e in
                 guard e.buttonNumber == button else { return }
-                MainActor.assumeIsolated { self?.controller.setButtonHeld(e.type == .otherMouseDown) }
-            }
-            let mask: NSEvent.EventTypeMask = [.otherMouseDown, .otherMouseUp]
-            if let g = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler) {
-                laserButtonMonitors.append(g)
-            }
-            if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { handler($0); return $0 }) {
-                laserButtonMonitors.append(l)
+                MainActor.assumeIsolated {
+                    if e.type == .otherMouseDown { self?.controller.laserButtonPressed() } else { self?.controller.laserButtonReleased() }
+                }
             }
         }
     }
 
     @objc private func learnLaserButton(_ sender: Any?) {
-        startLearning(switchToHold: settings.mode == .off)
+        // In "off" and "always" the button would do nothing, so switch to the
+        // button mode once one is learned.
+        startLearning(switchToHold: settings.mode == .off || settings.mode == .always)
     }
 
     private func startLearning(switchToHold: Bool) {

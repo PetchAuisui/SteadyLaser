@@ -67,10 +67,44 @@ final class LaserController {
         isPaused = false
     }
 
-    /// Set while the laser button on the remote is held down.
+    /// Set while the laser button is showing the laser.
     private(set) var buttonHeld = false
+    private var buttonDownAt: CFTimeInterval = 0
+    private var pressHidLaser = false
 
-    func setButtonHeld(_ held: Bool) {
+    /// A press shorter than this latches the laser on until the next press;
+    /// a longer one is "hold to show". The Norwii pointer button sends a ~20 ms
+    /// Control tap however long it's held, so it always latches:
+    /// press = show, press again = hide.
+    private let tapLength: CFTimeInterval = 0.3
+
+    func laserButtonPressed() {
+        if buttonHeld {
+            // Latched on by an earlier tap: this press turns it off.
+            pressHidLaser = true
+            setButtonHeld(false)
+        } else {
+            pressHidLaser = false
+            buttonDownAt = CACurrentMediaTime()
+            setButtonHeld(true)
+        }
+    }
+
+    func laserButtonReleased() {
+        if pressHidLaser {
+            pressHidLaser = false
+            return
+        }
+        if CACurrentMediaTime() - buttonDownAt >= tapLength { setButtonHeld(false) }
+    }
+
+    /// The button was unbound or changed: drop any latched state.
+    func resetLaserButton() {
+        pressHidLaser = false
+        setButtonHeld(false)
+    }
+
+    private func setButtonHeld(_ held: Bool) {
         guard held != buttonHeld else { return }
         buttonHeld = held
         if held {
