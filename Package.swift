@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "SteadyLaser",
             path: "Sources/SteadyLaser"
-        )
+        ),
+        .testTarget(
+            name: "SteadyLaserTests",
+            dependencies: ["SteadyLaser"],
+            path: "Tests/SteadyLaserTests"
+        ),
     ]
 )

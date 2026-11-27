@@ -67,6 +67,9 @@ final class LaserController {
         isPaused = false
     }
 
+    /// Time source for the button's tap / hold / double-press timing (tests replace it).
+    var clock: () -> CFTimeInterval = CACurrentMediaTime
+
     /// Set while the laser button is showing the laser.
     private(set) var buttonHeld = false
     private var buttonDownAt: CFTimeInterval = 0
@@ -85,7 +88,7 @@ final class LaserController {
             setButtonHeld(false)
         } else {
             pressHidLaser = false
-            buttonDownAt = CACurrentMediaTime()
+            buttonDownAt = clock()
             setButtonHeld(true)
         }
     }
@@ -95,7 +98,7 @@ final class LaserController {
             pressHidLaser = false
             return
         }
-        if CACurrentMediaTime() - buttonDownAt >= tapLength { setButtonHeld(false) }
+        if clock() - buttonDownAt >= tapLength { setButtonHeld(false) }
     }
 
     /// The button was unbound or changed: drop any latched state.
@@ -125,7 +128,7 @@ final class LaserController {
     private func setButtonHeld(_ held: Bool) {
         guard held != buttonHeld else { return }
         buttonHeld = held
-        let now = CACurrentMediaTime()
+        let now = clock()
         if held {
             // Start fresh at the cursor, no tail sweeping in from the old spot.
             filter.reset()
