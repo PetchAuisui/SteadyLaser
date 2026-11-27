@@ -59,14 +59,44 @@ final class LaserButtonTimingTests: XCTestCase {
 
     func testThirdPressStartsOver() {
         remotePress(shown: 0.5)
-        now += 0.5
+        now += 0.8
         remotePress(shown: 0.5)
-        now += 0.5
+        now += 0.8
         remotePress(shown: 0.5)
         XCTAssertEqual(doublePresses, 1, "press 3 alone isn't a double press")
-        now += 0.5
+        now += 0.8
         remotePress(shown: 0.5)
         XCTAssertEqual(doublePresses, 2, "presses 3 and 4 are")
+    }
+
+    /// Faster than ~0.5 s is the remote's own double click (it switches the
+    /// remote's mode), so the app must not count it.
+    func testFastSecondPressIsLeftToTheRemote() {
+        remotePress(shown: 0.5)
+        now += 0.3
+        remotePress(shown: 0.5)
+        XCTAssertEqual(doublePresses, 0)
+    }
+
+    /// The remote holds back ⌃A for up to a second after a short press, so a
+    /// "short" first press can show for 1.6 s.
+    func testFirstPressShownUpToAboutOneAndAHalfSecondsCounts() {
+        remotePress(shown: 1.6)
+        now += 0.8
+        remotePress(shown: 0.8)
+        XCTAssertEqual(doublePresses, 1)
+    }
+
+    func testSlowRhythmUpToOneAndAHalfSeconds() {
+        remotePress(shown: 0.6)
+        now += 1.4
+        remotePress(shown: 0.6)
+        XCTAssertEqual(doublePresses, 1)
+        now += 3
+        remotePress(shown: 0.6)
+        now += 1.8
+        remotePress(shown: 0.6)
+        XCTAssertEqual(doublePresses, 1, "a pause of 1.8 s is two separate presses")
     }
 
     func testNormalPointingDoesNotSwitch() {
@@ -81,7 +111,7 @@ final class LaserButtonTimingTests: XCTestCase {
     func testResetForgetsTheLastPress() {
         remotePress(shown: 0.5)
         controller.resetLaserButton()
-        now += 0.3
+        now += 0.8
         remotePress(shown: 0.5)
         XCTAssertEqual(doublePresses, 0)
     }
