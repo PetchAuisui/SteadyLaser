@@ -113,6 +113,7 @@ final class LaserController {
     private var shownAt: CFTimeInterval = -.infinity
     private var lastHiddenAt: CFTimeInterval = -.infinity
     private var lastShownFor: CFTimeInterval = .infinity
+    private var secondOfDouble = false
 
     /// A double press is a short press followed by another one soon after.
     /// The remote turns a fast double click into a single ⌃L … ⌃A it handles
@@ -129,14 +130,14 @@ final class LaserController {
             // Start fresh at the cursor, no tail sweeping in from the old spot.
             filter.reset()
             trail.removeAll()
-            if lastShownFor < doublePressFirstMax, now - lastHiddenAt < doublePressGapMax {
-                lastHiddenAt = -.infinity   // a third press starts over
-                onDoublePress?()
-            }
+            secondOfDouble = lastShownFor < doublePressFirstMax && now - lastHiddenAt < doublePressGapMax
+            if secondOfDouble { onDoublePress?() }
             shownAt = now
         } else {
             lastHiddenAt = now
-            lastShownFor = now - shownAt
+            // The press that completed a double press can't start another,
+            // so a quick third press starts over instead of switching back.
+            lastShownFor = secondOfDouble ? .infinity : now - shownAt
         }
         wake()
     }
