@@ -11,6 +11,10 @@ MainActor.assumeIsolated {
         DevTools.snapshotSpotlight(to: args[i + 1])
         exit(0)
     }
+    if let i = args.firstIndex(of: "--render-icon"), i + 1 < args.count {
+        DevTools.renderIcon(to: args[i + 1])
+        exit(0)
+    }
     if let i = args.firstIndex(of: "--snapshot-capture"), i + 1 < args.count {
         DevTools.snapshotCapturePanel(to: args[i + 1])
         exit(0)
