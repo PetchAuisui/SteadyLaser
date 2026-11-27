@@ -61,10 +61,12 @@ final class LaserView: NSView {
     func applyStyle() {
         let s = Settings.shared
         renderer.configure(
+            kind: s.kind,
             style: s.style,
             radius: s.size.radius,
             color: s.color.color,
-            scale: window?.backingScaleFactor ?? 2
+            scale: window?.backingScaleFactor ?? 2,
+            canvas: bounds.size
         )
     }
 

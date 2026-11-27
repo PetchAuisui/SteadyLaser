@@ -34,6 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.settings.mode = (self.settings.mode == .off) ? self.settings.lastActiveMode : .off
         }
 
+        // Pressing the laser button twice switches Laser / Spotlight.
+        controller.onDoublePress = { [weak self] in
+            guard let self else { return }
+            self.settings.kind = (self.settings.kind == .laser) ? .spotlight : .laser
+        }
+
         bindLaserButton()
         refreshMenu()
         controller.start()
@@ -242,7 +248,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
-        menu.addItem(submenu("รูปแบบ", LaserStyle.allCases.map {
+        menu.addItem(submenu("รูปแบบ", PointerKind.allCases.map {
+            choice($0.title, $0.rawValue, selected: $0 == settings.kind, #selector(setKind(_:)))
+        } + [.separator(), label("กดปุ่มเลเซอร์ 2 ครั้งเพื่อสลับ")]))
+        menu.addItem(submenu("รูปแบบเลเซอร์", LaserStyle.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.style, #selector(setStyle(_:)))
         }))
         menu.addItem(submenu("สี", LaserColor.allCases.map {
@@ -314,6 +323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let v = LaserMode(rawValue: raw(sender)) else { return }
         settings.mode = v
     }
+    @objc private func setKind(_ sender: NSMenuItem) { if let v = PointerKind(rawValue: raw(sender)) { settings.kind = v } }
     @objc private func setStyle(_ sender: NSMenuItem) { if let v = LaserStyle(rawValue: raw(sender)) { settings.style = v } }
     @objc private func setColor(_ sender: NSMenuItem) { if let v = LaserColor(rawValue: raw(sender)) { settings.color = v } }
     @objc private func setSize(_ sender: NSMenuItem) { if let v = LaserSize(rawValue: raw(sender)) { settings.size = v } }

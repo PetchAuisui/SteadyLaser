@@ -13,6 +13,24 @@ enum LaserMode: String, CaseIterable {
     }
 }
 
+/// What the pointer shows: a laser dot (looking like `LaserStyle`) or a spotlight.
+enum PointerKind: String, CaseIterable {
+    case laser, spotlight
+
+    var title: String {
+        switch self {
+        case .laser: "เลเซอร์ (Laser)"
+        case .spotlight: "สปอตไลต์ หรี่จอรอบวงกลม (Spotlight)"
+        }
+    }
+
+    /// Spotlight circle radius = laser dot radius × this (small 90, medium 135, large 195 pt).
+    static let spotlightScale: CGFloat = 15
+    /// How dark the screen gets outside the spotlight.
+    static let spotlightShade: CGFloat = 0.7
+}
+
+/// How the laser dot looks.
 enum LaserStyle: String, CaseIterable {
     case dot, glow, comet
 
@@ -132,6 +150,12 @@ final class Settings {
     var lastActiveMode: LaserMode {
         let m: LaserMode = value("lastActiveMode", .moving)
         return m == .off ? .moving : m
+    }
+
+    var kind: PointerKind {
+        // Spotlight used to be a laser style: carry it over.
+        get { value("pointerKind", defaults.string(forKey: "laserStyle") == "spotlight" ? .spotlight : .laser) }
+        set { store(newValue, "pointerKind") }
     }
 
     var style: LaserStyle {

@@ -67,6 +67,9 @@ final class LaserController {
         isPaused = false
     }
 
+    /// Time source for the button's tap / hold / double-press timing (tests replace it).
+    var clock: () -> CFTimeInterval = CACurrentMediaTime
+
     /// Set while the laser button is showing the laser.
     private(set) var buttonHeld = false
     private var buttonDownAt: CFTimeInterval = 0
@@ -85,7 +88,7 @@ final class LaserController {
             setButtonHeld(false)
         } else {
             pressHidLaser = false
-            buttonDownAt = CACurrentMediaTime()
+            buttonDownAt = clock()
             setButtonHeld(true)
         }
     }
@@ -95,22 +98,49 @@ final class LaserController {
             pressHidLaser = false
             return
         }
-        if CACurrentMediaTime() - buttonDownAt >= tapLength { setButtonHeld(false) }
+        if clock() - buttonDownAt >= tapLength { setButtonHeld(false) }
     }
 
     /// The button was unbound or changed: drop any latched state.
     func resetLaserButton() {
         pressHidLaser = false
         setButtonHeld(false)
+        lastHiddenAt = -.infinity
     }
+
+    // MARK: Double press
+
+    /// Called when the button is pressed twice in a row (switches Laser / Spotlight).
+    var onDoublePress: (() -> Void)?
+
+    private var shownAt: CFTimeInterval = -.infinity
+    private var lastHiddenAt: CFTimeInterval = -.infinity
+    private var lastShownFor: CFTimeInterval = .infinity
+    private var secondOfDouble = false
+
+    /// A double press is a short press followed by another one soon after.
+    /// The remote turns a fast double click into a single ⌃L … ⌃A it handles
+    /// itself, so only two separate presses are seen; measured on the Norwii:
+    /// first press shown ~0.7 s, next press ~0.7 s after the release.
+    private let doublePressFirstMax: CFTimeInterval = 1.2
+    private let doublePressGapMax: CFTimeInterval = 1.0
 
     private func setButtonHeld(_ held: Bool) {
         guard held != buttonHeld else { return }
         buttonHeld = held
+        let now = clock()
         if held {
             // Start fresh at the cursor, no tail sweeping in from the old spot.
             filter.reset()
             trail.removeAll()
+            secondOfDouble = lastShownFor < doublePressFirstMax && now - lastHiddenAt < doublePressGapMax
+            if secondOfDouble { onDoublePress?() }
+            shownAt = now
+        } else {
+            lastHiddenAt = now
+            // The press that completed a double press can't start another,
+            // so a quick third press starts over instead of switching back.
+            lastShownFor = secondOfDouble ? .infinity : now - shownAt
         }
         wake()
     }
