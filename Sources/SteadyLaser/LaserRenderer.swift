@@ -10,6 +10,7 @@ struct TrailPoint {
 /// it. Nothing is redrawn on the CPU per frame; we only move layers, with
 /// implicit animations off so the dot lands exactly where we put it.
 ///
+///   dim   — Spotlight: darkens the whole screen except a soft-edged circle
 ///   glow  — wide, faint radial halo (Glow / Comet)
 ///   tail  — one tapered ribbon along the recent path, fading toward the end (Comet)
 ///   spot  — the dot: white-hot center, saturated body, soft edge
@@ -17,6 +18,10 @@ struct TrailPoint {
 final class LaserRenderer {
     let container = CALayer()
 
+    /// One radial gradient, clear in the middle and dark outside, big enough
+    /// to cover the screen from wherever its center is. Following the
+    /// cursor only moves it; nothing is redrawn.
+    private let dim = CAGradientLayer()
     private let glow = CAGradientLayer()
     private let tail = CAGradientLayer()
     private let tailShape = CAShapeLayer()
@@ -34,18 +39,20 @@ final class LaserRenderer {
         tail.mask = tailShape
         tailShape.fillColor = NSColor.white.cgColor
 
-        for g in [glow, spot] {
+        for g in [dim, glow, spot] {
             g.type = .radial
             g.startPoint = CGPoint(x: 0.5, y: 0.5)
             g.endPoint = CGPoint(x: 1, y: 1)
         }
 
+        container.addSublayer(dim)
         container.addSublayer(glow)
         container.addSublayer(tail)
         container.addSublayer(spot)
     }
 
-    func configure(style: LaserStyle, radius r: CGFloat, color: NSColor, scale: CGFloat) {
+    /// `canvas` is the size of the screen the laser is drawn on.
+    func configure(style: LaserStyle, radius r: CGFloat, color: NSColor, scale: CGFloat, canvas: CGSize) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -54,11 +61,25 @@ final class LaserRenderer {
         self.radius = r
         let c = color.usingColorSpace(.sRGB) ?? color
 
-        for layer in [container, glow, tail, tailShape, spot] {
+        for layer in [container, dim, glow, tail, tailShape, spot] {
             layer.contentsScale = scale
         }
 
-        glow.isHidden = (style == .dot)
+        let spotlight = style == .spotlight
+        dim.isHidden = !spotlight
+        spot.isHidden = spotlight
+        if spotlight {
+            let hole = r * LaserStyle.spotlightScale
+            let feather = hole * 0.25
+            // Reaches every corner of the screen from any point on it.
+            let reach = hypot(canvas.width, canvas.height) + hole + feather
+            dim.bounds = CGRect(x: 0, y: 0, width: reach * 2, height: reach * 2)
+            let shade = NSColor(white: 0, alpha: LaserStyle.spotlightShade)
+            dim.colors = [NSColor.clear, .clear, shade, shade].map(\.cgColor)
+            dim.locations = [0, hole / reach, (hole + feather) / reach, 1].map { NSNumber(value: Double($0)) }
+        }
+
+        glow.isHidden = (style == .dot || spotlight)
         let glowDiameter = r * 2 * 3.4
         glow.bounds = CGRect(x: 0, y: 0, width: glowDiameter, height: glowDiameter)
         glow.colors = [c.withAlphaComponent(0.50), c.withAlphaComponent(0.20), c.withAlphaComponent(0)].map(\.cgColor)
@@ -96,6 +117,7 @@ final class LaserRenderer {
         container.isHidden = false
         container.opacity = Float(opacity)
 
+        dim.position = point
         glow.position = point
         spot.position = point
 

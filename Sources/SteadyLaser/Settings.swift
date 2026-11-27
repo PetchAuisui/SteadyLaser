@@ -14,15 +14,21 @@ enum LaserMode: String, CaseIterable {
 }
 
 enum LaserStyle: String, CaseIterable {
-    case dot, glow, comet
+    case dot, glow, comet, spotlight
 
     var title: String {
         switch self {
         case .dot: "จุด (Dot)"
         case .glow: "เรืองแสง (Glow)"
         case .comet: "ดาวหาง มีหาง (Comet)"
+        case .spotlight: "สปอตไลต์ หรี่จอรอบวงกลม (Spotlight)"
         }
     }
+
+    /// Spotlight circle radius = laser dot radius × this (small 90, medium 135, large 195 pt).
+    static let spotlightScale: CGFloat = 15
+    /// How dark the screen gets outside the spotlight.
+    static let spotlightShade: CGFloat = 0.7
 }
 
 enum LaserSize: String, CaseIterable {

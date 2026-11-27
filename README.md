@@ -15,6 +15,7 @@
 ## ใช้งาน
 
 - ไอคอนจะอยู่บนแถบเมนู (◉) ใช้เปลี่ยนโหมด รูปแบบ สี ขนาด และความนิ่ง
+- รูปแบบ **สปอตไลต์ (Spotlight)** จะหรี่จอทั้งจอ ยกเว้นวงกลมขอบนุ่มรอบตำแหน่งที่ชี้ ใช้ได้กับทุกโหมด เช่น กดค้างปุ่ม pointer เพื่อเปิดสปอตไลต์ ขนาดวงกลมเปลี่ยนตามเมนู "ขนาด" (เล็ก 90 / กลาง 135 / ใหญ่ 195 pt)
 - ปุ่มลัด **⌃⌥L** สำหรับเปิด/ปิดเลเซอร์
 - ควรปิดแอป Norwii Presenter ก่อนใช้ เพราะแอปนั้นจะย้ายเคอร์เซอร์เองและแย่งกับแอปนี้
 
@@ -59,12 +60,13 @@
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot styles.png   # เรนเดอร์ทุกสไตล์เป็นรูป
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --selftest              # วัดตัวกรอง
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot-capture p.png # เรนเดอร์หน้าต่างตั้งปุ่ม
+"build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot-spotlight s.png # เรนเดอร์สปอตไลต์ทุกขนาดบนสไลด์ตัวอย่าง
 ```
 
 ## โครงสร้างโค้ด
 
 - `LaserController.swift` — อ่านตำแหน่งเมาส์ทุกเฟรม กรองด้วย One Euro จัดการการเฟด และหยุด display link เมื่อไม่มีอะไรขยับ
-- `LaserRenderer.swift` — สร้างเลเซอร์จาก CALayer: glow, หางดาวหาง (ribbon), และตัวจุด
+- `LaserRenderer.swift` — สร้างเลเซอร์จาก CALayer: glow, หางดาวหาง (ribbon), ตัวจุด และสปอตไลต์ (radial gradient ใหญ่พอคลุมทั้งจอ แค่ย้ายตำแหน่งทุกเฟรม ไม่วาดใหม่)
 - `OverlayWindow.swift` — หน้าต่างใสคลิกทะลุได้ หนึ่งหน้าต่างต่อหนึ่งจอ แสดงอยู่เหนือสไลด์แบบเต็มจอ
 - `CursorHider.swift` — ซ่อนเคอร์เซอร์ระบบ โดยใช้ private API `SetsCursorInBackground` (ถ้า API นี้ใช้ไม่ได้ เคอร์เซอร์จะแสดงตามปกติ)
 - `LaserButton.swift` — เก็บปุ่มเลเซอร์ที่ตั้งไว้ และหน้าต่างที่รอให้กดปุ่มบนรีโมตเพื่อจำปุ่ม
