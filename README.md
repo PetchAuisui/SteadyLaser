@@ -63,6 +63,7 @@
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --selftest              # วัดตัวกรอง
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot-capture p.png # เรนเดอร์หน้าต่างตั้งปุ่ม
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot-spotlight s.png # เรนเดอร์สปอตไลต์ทุกขนาดบนสไลด์ตัวอย่าง
+./build.sh --icon                                                             # วาดไอคอนแอปใหม่ลง Resources/AppIcon.icns
 swift test                                                                    # รัน unit test
 ```
 
