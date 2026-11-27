@@ -79,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let annotateWindow: TimeInterval = 0.1
 
     private func modifierButton(down: Bool) {
+        DebugLog.write("button: modifier \(down ? "down" : "up")")
         guard down != modifierButtonDown else { return }
         modifierButtonDown = down
         if down {
@@ -297,6 +298,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hide.state = settings.hideCursor ? .on : .off
         menu.addItem(hide)
 
+        let detach = action("ตอนกดปุ่มเลเซอร์ เมาส์ไม่ไปชี้หรือ hover อะไร", #selector(toggleDetachCursor(_:)))
+        detach.state = settings.detachCursor ? .on : .off
+        menu.addItem(detach)
+
         let login = action("เปิดอัตโนมัติตอนเข้าเครื่อง", #selector(toggleLaunchAtLogin(_:)))
         login.state = launchesAtLogin ? .on : .off
         menu.addItem(login)
@@ -356,5 +361,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func setSize(_ sender: NSMenuItem) { if let v = LaserSize(rawValue: raw(sender)) { settings.size = v } }
     @objc private func setStability(_ sender: NSMenuItem) { if let v = Stability(rawValue: raw(sender)) { settings.stability = v } }
     @objc private func toggleHideCursor(_ sender: NSMenuItem) { settings.hideCursor.toggle() }
+    @objc private func toggleDetachCursor(_ sender: NSMenuItem) { settings.detachCursor.toggle() }
     @objc private func quit(_ sender: NSMenuItem) { NSApp.terminate(nil) }
 }
