@@ -8,7 +8,7 @@ import QuartzCore
 enum DevTools {
     static func snapshot(to path: String) {
         let cell = CGSize(width: 220, height: 170)
-        let styles = LaserStyle.allCases.filter { $0 != .spotlight }   // too big for a cell: --snapshot-spotlight
+        let styles = LaserStyle.allCases   // the spotlight is too big for a cell: --snapshot-spotlight
         let backgrounds: [NSColor] = [NSColor(white: 0.96, alpha: 1), NSColor(white: 0.12, alpha: 1)]
         let colors: [LaserColor] = [.red, .green]
         let size = CGSize(width: cell.width * CGFloat(styles.count), height: cell.height * CGFloat(backgrounds.count * colors.count))
@@ -30,7 +30,7 @@ enum DevTools {
                     root.addSublayer(back)
 
                     let r = LaserRenderer()
-                    r.configure(style: style, radius: LaserSize.medium.radius, color: color.color, scale: scale, canvas: cell)
+                    r.configure(kind: .laser, style: style, radius: LaserSize.medium.radius, color: color.color, scale: scale, canvas: cell)
                     back.addSublayer(r.container)
 
                     // A fake recent path curving in from the lower left.
@@ -99,7 +99,7 @@ enum DevTools {
             }
 
             let r = LaserRenderer()
-            r.configure(style: .spotlight, radius: size.radius, color: LaserColor.red.color, scale: scale, canvas: slide)
+            r.configure(kind: .spotlight, style: .comet, radius: size.radius, color: LaserColor.red.color, scale: scale, canvas: slide)
             back.addSublayer(r.container)
             r.update(point: CGPoint(x: 460, y: 200), opacity: 1, trail: [], now: 0, trailDuration: 0.12)
         }

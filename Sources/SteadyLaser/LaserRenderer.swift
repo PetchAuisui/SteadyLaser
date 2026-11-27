@@ -27,6 +27,7 @@ final class LaserRenderer {
     private let tailShape = CAShapeLayer()
     private let spot = CAGradientLayer()
 
+    private var kind: PointerKind = .laser
     private var style: LaserStyle = .comet
     private var radius: CGFloat = 9
 
@@ -52,11 +53,12 @@ final class LaserRenderer {
     }
 
     /// `canvas` is the size of the screen the laser is drawn on.
-    func configure(style: LaserStyle, radius r: CGFloat, color: NSColor, scale: CGFloat, canvas: CGSize) {
+    func configure(kind: PointerKind, style: LaserStyle, radius r: CGFloat, color: NSColor, scale: CGFloat, canvas: CGSize) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
+        self.kind = kind
         self.style = style
         self.radius = r
         let c = color.usingColorSpace(.sRGB) ?? color
@@ -65,16 +67,16 @@ final class LaserRenderer {
             layer.contentsScale = scale
         }
 
-        let spotlight = style == .spotlight
+        let spotlight = kind == .spotlight
         dim.isHidden = !spotlight
         spot.isHidden = spotlight
         if spotlight {
-            let hole = r * LaserStyle.spotlightScale
+            let hole = r * PointerKind.spotlightScale
             let feather = hole * 0.25
             // Reaches every corner of the screen from any point on it.
             let reach = hypot(canvas.width, canvas.height) + hole + feather
             dim.bounds = CGRect(x: 0, y: 0, width: reach * 2, height: reach * 2)
-            let shade = NSColor(white: 0, alpha: LaserStyle.spotlightShade)
+            let shade = NSColor(white: 0, alpha: PointerKind.spotlightShade)
             dim.colors = [NSColor.clear, .clear, shade, shade].map(\.cgColor)
             dim.locations = [0, hole / reach, (hole + feather) / reach, 1].map { NSNumber(value: Double($0)) }
         }
@@ -85,7 +87,7 @@ final class LaserRenderer {
         glow.colors = [c.withAlphaComponent(0.50), c.withAlphaComponent(0.20), c.withAlphaComponent(0)].map(\.cgColor)
         glow.locations = [0, 0.3, 1]
 
-        tail.isHidden = (style != .comet)
+        tail.isHidden = (style != .comet || spotlight)
         tail.colors = [c.withAlphaComponent(0), c.withAlphaComponent(0.25), c.withAlphaComponent(0.7)].map(\.cgColor)
         tail.locations = [0, 0.45, 1]
 
@@ -121,7 +123,7 @@ final class LaserRenderer {
         glow.position = point
         spot.position = point
 
-        guard style == .comet else { return }
+        guard kind == .laser, style == .comet else { return }
         updateTail(head: point, trail: trail, now: now, duration: trailDuration)
     }
 
