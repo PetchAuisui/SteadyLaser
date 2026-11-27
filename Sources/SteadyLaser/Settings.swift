@@ -187,6 +187,16 @@ final class Settings {
         }
     }
 
+    /// While the laser button shows the laser, keep the real cursor still so
+    /// it doesn't hover or point at anything underneath; only the laser moves.
+    var detachCursor: Bool {
+        get { defaults.object(forKey: "detachCursor") as? Bool ?? true }
+        set {
+            defaults.set(newValue, forKey: "detachCursor")
+            onChange?()
+        }
+    }
+
     var hideCursor: Bool {
         get { defaults.object(forKey: "hideCursor") as? Bool ?? true }
         set {
