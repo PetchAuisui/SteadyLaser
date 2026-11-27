@@ -128,7 +128,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         unbindLaserButton()
         laserButtonError = nil
         // No button set: use the Norwii pointer key (⌃L … ⌃A from any Norwii remote).
-        let binding = settings.laserButton ?? LaserButton.norwiiPointer
+        var binding = settings.laserButton ?? LaserButton.norwiiPointer
+        if case let .modifier(_, device) = binding, !LaserButton.allowed(binding, from: device) {
+            // A Norwii key other than Pointer, saved before the learn window
+            // refused them: every press latched the laser on. Back to Pointer.
+            settings.laserButton = nil
+            binding = .norwiiPointer
+        }
 
         switch binding {
         case let .key(code, modifiers, _):
@@ -244,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let laserButtonError { menu.addItem(label("⚠︎ " + laserButtonError)) }
         menu.addItem(action(settings.laserButton == nil ? "ตั้งปุ่มเลเซอร์…" : "เปลี่ยนปุ่มเลเซอร์…", #selector(learnLaserButton(_:))))
         if settings.laserButton != nil {
-            menu.addItem(action("ล้างปุ่มเลเซอร์", #selector(clearLaserButton(_:))))
+            menu.addItem(action("กลับไปใช้ปุ่ม Pointer ของ Norwii", #selector(clearLaserButton(_:))))
         }
         menu.addItem(.separator())
 

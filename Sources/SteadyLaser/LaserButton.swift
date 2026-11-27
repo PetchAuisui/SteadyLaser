@@ -11,6 +11,9 @@ struct InputDevice: Equatable {
 
     var plist: [String: Any] { ["vendor": vendorID, "product": productID, "name": name] }
 
+    static let norwiiVendorID = 0x3243
+    var isNorwii: Bool { vendorID == Self.norwiiVendorID }
+
     /// Same maker, so one remote matches whether it comes in through its USB
     /// dongle ("BLE Presenter Dongle", 0x3243/0x382) or straight over
     /// Bluetooth ("Norwii N95s BLE", 0x3243/0x3a2). Devices without a vendor
@@ -73,7 +76,17 @@ enum LaserButton: Equatable {
     /// Default when no button is set: Control from any Norwii remote (vendor
     /// 0x3243), i.e. the pointer key's ⌃L … ⌃A.
     static let norwiiPointer = LaserButton.modifier(
-        code: kVK_Control, device: InputDevice(vendorID: 0x3243, productID: 0, name: "Norwii"))
+        code: kVK_Control, device: InputDevice(vendorID: InputDevice.norwiiVendorID, productID: 0, name: "Norwii"))
+
+    /// On a Norwii remote only the Pointer key (its Control, from ⌃L / ⌃A) can
+    /// be the laser button. Its other keys send things slides need (Page Up /
+    /// Down, B, E, ⌘ shortcuts), and as a laser button each of their presses
+    /// would latch the laser on until the next one.
+    static func allowed(_ button: LaserButton, from device: InputDevice?) -> Bool {
+        guard let device, device.isNorwii else { return true }
+        if case .modifier(kVK_Control, _) = button { return true }
+        return false
+    }
 
     var title: String {
         switch self {
@@ -227,13 +240,13 @@ final class ButtonCapture: NSObject, NSWindowDelegate {
             // alone, so ⌃L isn't taken from other apps as a hotkey and the
             // remote's matching ⌃A can turn the laser off.
             if let p = pendingModifier, p.device != nil, event.timestamp - p.at < remoteChordGap {
-                finish(.modifier(code: p.code, device: p.device))
+                accept(.modifier(code: p.code, device: p.device), from: p.device)
                 return true
             }
-            finish(LaserButton.from(keyEvent: event))
+            accept(LaserButton.from(keyEvent: event), from: InputDevice.of(event))
             return true
         case .otherMouseDown:
-            finish(.mouse(button: event.buttonNumber))
+            accept(.mouse(button: event.buttonNumber), from: InputDevice.of(event))
             return true
         case .flagsChanged:
             guard let down = LaserButton.modifierIsDown(event) else { return false }
@@ -244,12 +257,33 @@ final class ButtonCapture: NSObject, NSWindowDelegate {
                 let alone = held == LaserButton.modifierKeys[code]?.flag
                 pendingModifier = alone ? (code, InputDevice.of(event), event.timestamp) : nil
             } else if let pending = pendingModifier, pending.code == code {
-                finish(.modifier(code: code, device: pending.device))
+                accept(.modifier(code: code, device: pending.device), from: pending.device)
             }
             return false
         default:
             return false
         }
+    }
+
+    /// Saves the button, or keeps waiting with a warning if it's a Norwii key
+    /// other than Pointer.
+    private func accept(_ button: LaserButton, from device: InputDevice?) {
+        guard LaserButton.allowed(button, from: device) else {
+            pendingModifier = nil
+            showWarning("ปุ่ม \(button.title) ของรีโมตมีหน้าที่อยู่แล้ว ใช้เป็นปุ่มเลเซอร์ไม่ได้ ให้กดปุ่ม Pointer แทน")
+            return
+        }
+        finish(button)
+    }
+
+    private weak var warningLabel: NSTextField?
+
+    private func showWarning(_ text: String) {
+        guard let label = warningLabel, let panel, let content = panel.contentView else { return }
+        label.stringValue = "⚠︎ " + text
+        label.isHidden = false
+        content.layoutSubtreeIfNeeded()
+        panel.setContentSize(content.fittingSize)
     }
 
     /// The panel's content; also used by `--snapshot-capture` to check the layout.
@@ -264,10 +298,14 @@ final class ButtonCapture: NSObject, NSWindowDelegate {
         let hint = NSTextField(wrappingLabelWithString:
             "ถ้ากดแล้วไม่มีอะไรเกิดขึ้น แปลว่าปุ่มนั้นไม่ได้ส่งอะไรมาที่เครื่อง ให้ลองปุ่มอื่น หรือใช้โหมด \"แสดงเมื่อขยับเมาส์\" แทน")
         hint.textColor = .secondaryLabelColor
+        let warning = NSTextField(wrappingLabelWithString: "")
+        warning.textColor = .systemRed
+        warning.isHidden = true
+        warningLabel = warning
         let cancel = NSButton(title: "ยกเลิก", target: self, action: #selector(cancelPressed))
         cancel.keyEquivalent = ""
 
-        let stack = NSStackView(views: [title, norwii, body, hint, cancel])
+        let stack = NSStackView(views: [title, norwii, warning, body, hint, cancel])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10

@@ -36,6 +36,19 @@ final class LaserButtonTests: XCTestCase {
         XCTAssertTrue(macKeyboard.isSameMaker(as: macKeyboard))
     }
 
+    /// Only the Pointer key (Control) of a Norwii remote may be the laser button;
+    /// its ⌘ shortcut made every press latch the laser on.
+    func testOnlyNorwiiPointerIsAllowed() {
+        XCTAssertTrue(LaserButton.allowed(.modifier(code: kVK_Control, device: dongle), from: dongle))
+        XCTAssertTrue(LaserButton.allowed(.norwiiPointer, from: bluetooth))
+        XCTAssertFalse(LaserButton.allowed(.modifier(code: kVK_Command, device: dongle), from: dongle))
+        XCTAssertFalse(LaserButton.allowed(.key(code: kVK_PageDown, modifiers: 0, name: "Page Down"), from: dongle))
+        XCTAssertFalse(LaserButton.allowed(.mouse(button: 3), from: bluetooth))
+        // Other devices are unrestricted.
+        XCTAssertTrue(LaserButton.allowed(.modifier(code: kVK_RightOption, device: macKeyboard), from: macKeyboard))
+        XCTAssertTrue(LaserButton.allowed(.key(code: kVK_F5, modifiers: 0, name: "F5"), from: nil))
+    }
+
     func testTitles() {
         XCTAssertEqual(LaserButton.mouse(button: 3).title, "ปุ่มเมาส์ 4")
         XCTAssertEqual(LaserButton.modifier(code: kVK_Control, device: dongle).title, "Control (⌃) จาก BLE Presenter Dongle")
