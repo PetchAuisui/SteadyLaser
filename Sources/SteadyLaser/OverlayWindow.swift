@@ -2,20 +2,22 @@ import AppKit
 import QuartzCore
 
 /// A transparent, click-through window covering one screen, above full-screen
-/// apps (Keynote / PowerPoint slideshows) and on every Space.
+/// apps (Keynote / PowerPoint slideshows) and on every Space. A non-activating
+/// panel, so taking the mouse never pulls focus from the slideshow.
 @MainActor
-final class OverlayWindow: NSWindow {
+final class OverlayWindow: NSPanel {
     let laserView: LaserView
 
     init(screen: NSScreen, controller: LaserController) {
         laserView = LaserView(frame: NSRect(origin: .zero, size: screen.frame.size), controller: controller)
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         setFrame(screen.frame, display: false)
 
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
         ignoresMouseEvents = true
+        hidesOnDeactivate = false
         isReleasedWhenClosed = false
         animationBehavior = .none
         level = .screenSaver
@@ -25,6 +27,15 @@ final class OverlayWindow: NSWindow {
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    /// Take the mouse (hover, clicks, scrolls) from the windows underneath,
+    /// or let it through again. A fully clear window passes the mouse through
+    /// even when it doesn't ignore it, so it gets a background too faint to see.
+    func setAbsorbsMouse(_ absorb: Bool) {
+        ignoresMouseEvents = !absorb
+        acceptsMouseMovedEvents = absorb
+        backgroundColor = absorb ? NSColor(white: 0, alpha: 0.004) : .clear
+    }
 }
 
 /// Hosts the laser layers and drives rendering from a display link, so each

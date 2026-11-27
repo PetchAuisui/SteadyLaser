@@ -15,8 +15,6 @@ final class LaserButtonTimingTests: XCTestCase {
         now = 100
         doublePresses = 0
         controller.clock = { [unowned self] in self.now }
-        controller.mouseLocation = { CGPoint(x: 300, y: 300) }
-        controller.warpCursor = { _ in }   // never move the real cursor in tests
         controller.onDoublePress = { [unowned self] in self.doublePresses += 1 }
     }
 

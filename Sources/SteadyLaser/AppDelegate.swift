@@ -298,7 +298,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hide.state = settings.hideCursor ? .on : .off
         menu.addItem(hide)
 
-        let detach = action("เลเซอร์ไม่ขยับเมาส์จริง (ไม่ไปชี้หรือ hover อะไร)", #selector(toggleDetachCursor(_:)))
+        let detach = action("ตอนกดปุ่มเลเซอร์ เมาส์ไม่ไปชี้หรือ hover อะไร", #selector(toggleDetachCursor(_:)))
         detach.state = settings.detachCursor ? .on : .off
         menu.addItem(detach)
 

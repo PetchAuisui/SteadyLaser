@@ -31,14 +31,14 @@ final class LaserController {
             MainActor.assumeIsolated { self?.rebuildWindows() }
         }
 
-        // Mouse moves wake the display links, and move the laser while the
-        // real cursor is parked.
+        // Wake the display links as soon as the mouse moves. While the
+        // overlay takes the mouse, moves come to this app instead (local).
         let moves: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: moves) { [weak self] e in
-            MainActor.assumeIsolated { self?.mouseMoved(e) }
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: moves) { [weak self] _ in
+            MainActor.assumeIsolated { self?.wakeIfNeeded() }
         }
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: moves) { [weak self] e in
-            MainActor.assumeIsolated { self?.mouseMoved(e) }
+            MainActor.assumeIsolated { self?.wakeIfNeeded() }
             return e
         }
 
@@ -46,8 +46,7 @@ final class LaserController {
         // of the cursor position while everything else is paused.
         wakeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                // While parked the real cursor stays put by design; moves arrive as events.
-                guard let self, self.isPaused, self.parkedAt == nil, let last = self.lastRaw else { return }
+                guard let self, self.isPaused, let last = self.lastRaw else { return }
                 let p = NSEvent.mouseLocation
                 if abs(p.x - last.x) > 0.5 || abs(p.y - last.y) > 0.5 { self.wakeIfNeeded() }
             }
@@ -63,7 +62,7 @@ final class LaserController {
     /// Settings changed: restyle layers and make sure we're running.
     func settingsChanged() {
         windows.forEach { $0.laserView.applyStyle() }
-        if !Settings.shared.detachCursor { parkedAt = nil }
+        updateMouseAbsorbing()
         if Settings.shared.mode != .off || opacity > 0 { wake() }
     }
 
@@ -71,6 +70,8 @@ final class LaserController {
         windows.forEach { $0.laserView.stop(); $0.close() }
         windows = NSScreen.screens.map { OverlayWindow(screen: $0, controller: self) }
         windows.forEach { $0.orderFrontRegardless() }
+        absorbsMouse = false
+        updateMouseAbsorbing()
         isPaused = false
     }
 
@@ -142,6 +143,7 @@ final class LaserController {
         guard held != buttonHeld else { return }
         buttonHeld = held
         DebugLog.write("button: laser \(held ? "on" : "off")")
+        updateMouseAbsorbing()
         let now = clock()
         if held {
             // Start fresh at the cursor, no tail sweeping in from the old spot.
@@ -151,9 +153,7 @@ final class LaserController {
             secondOfDouble = lastShownFor < doublePressFirstMax && gap >= doublePressGapMin && gap < doublePressGapMax
             if secondOfDouble { onDoublePress?() }
             shownAt = now
-            parkCursor()
         } else {
-            unparkCursor()
             lastHiddenAt = now
             // The press that completed a double press can't start another,
             // so a quick third press starts over instead of switching back.
@@ -162,67 +162,21 @@ final class LaserController {
         wake()
     }
 
-    // MARK: Virtual pointer
-    //
-    // While the laser button shows the laser, the real cursor stays where it
-    // was and only the laser moves (by the mouse's moves), so the hidden
-    // cursor doesn't hover over the Dock, buttons or links underneath.
+    // MARK: Not a mouse
 
-    /// Where the laser is drawn while the cursor is parked (AppKit global
-    /// coordinates). Kept through the fade-out, then dropped.
-    private(set) var virtualPointer: CGPoint?
-    /// Where the real cursor is parked; set while the button shows the laser.
-    private(set) var parkedAt: CGPoint?
-    /// Where the last press left the laser, and the cursor's spot then.
-    private var resumeSpot: (laser: CGPoint, cursor: CGPoint)?
+    /// While the laser button shows the laser, the overlay takes the mouse,
+    /// so the Dock, buttons and links underneath don't see the hidden cursor:
+    /// no hover, tooltips or clicks. The cursor itself moves as usual and the
+    /// laser follows it.
+    private(set) var absorbsMouse = false
+    private var mapsLaser = false
 
-    /// The real cursor position (tests replace it).
-    var mouseLocation: () -> CGPoint = { NSEvent.mouseLocation }
-    /// Puts the real cursor at `p`, AppKit global coordinates (tests replace it).
-    var warpCursor: (CGPoint) -> Void = { p in
-        let primaryTop = NSScreen.screens.first?.frame.maxY ?? 0
-        CGWarpMouseCursorPosition(CGPoint(x: p.x, y: primaryTop - p.y))
-        // Without this, real mouse moves are held back for a moment after a warp.
-        CGAssociateMouseAndMouseCursorPosition(1)
-    }
-
-    private func parkCursor() {
-        guard Settings.shared.detachCursor else { return }
-        let here = mouseLocation()
-        var start = here
-        // The cursor hasn't moved since the last press: carry on from where
-        // the laser was left, not from the parked cursor.
-        if let r = resumeSpot, hypot(here.x - r.cursor.x, here.y - r.cursor.y) < 1 { start = r.laser }
-        parkedAt = here
-        virtualPointer = start
-    }
-
-    private func unparkCursor() {
-        if let park = parkedAt, let laser = virtualPointer { resumeSpot = (laser, park) }
-        parkedAt = nil
-    }
-
-    /// A mouse move while parked: move the laser by it and put the cursor back.
-    /// `dy` is the event's deltaY, positive downward.
-    func pointerMoved(dx: CGFloat, dy: CGFloat) {
-        guard let park = parkedAt, let p = virtualPointer else { return }
-        virtualPointer = clampToScreens(CGPoint(x: p.x + dx, y: p.y - dy))
-        warpCursor(park)
-    }
-
-    private func mouseMoved(_ e: NSEvent) {
-        if parkedAt != nil {
-            DebugLog.write("move: dx \(e.deltaX) dy \(e.deltaY) at \(Int(e.locationInWindow.x)),\(Int(e.locationInWindow.y))")
-            pointerMoved(dx: e.deltaX, dy: e.deltaY)
-        }
-        wakeIfNeeded()
-    }
-
-    private func clampToScreens(_ p: CGPoint) -> CGPoint {
-        let frames = NSScreen.screens.map(\.frame)
-        guard let first = frames.first, !frames.contains(where: { $0.contains(p) }) else { return p }
-        let all = frames.dropFirst().reduce(first) { $0.union($1) }
-        return CGPoint(x: min(max(p.x, all.minX), all.maxX - 1), y: min(max(p.y, all.minY), all.maxY - 1))
+    private func updateMouseAbsorbing() {
+        let absorb = buttonHeld && Settings.shared.detachCursor
+        guard absorb != absorbsMouse else { return }
+        absorbsMouse = absorb
+        windows.forEach { $0.setAbsorbsMouse(absorb) }
+        DebugLog.write("mouse: overlay \(absorb ? "takes" : "lets go of") the mouse")
     }
 
     private func wakeIfNeeded() {
@@ -257,7 +211,17 @@ final class LaserController {
         filter.minCutoff = s.stability.minCutoff
         filter.beta = s.stability.beta
 
-        let raw = virtualPointer ?? mouseLocation()
+        var raw = NSEvent.mouseLocation
+        // While the overlay takes the mouse, the cursor stays off the Dock and
+        // the menu bar (they react to the cursor itself, under any window) and
+        // the laser is mapped over the whole screen, so it still reaches them.
+        // The mapping lasts through the fade-out, so the laser doesn't jump.
+        if absorbsMouse { mapsLaser = true }
+        if mapsLaser {
+            let kept = CursorHider.keepOffSystemUI(raw)
+            if absorbsMouse, let back = kept.cursor { CursorHider.warp(to: back) }
+            raw = kept.laser
+        }
         if let last = lastRaw {
             let jump = hypot(raw.x - last.x, raw.y - last.y)
             if jump > 0.5 { lastMoveTime = now }
@@ -286,7 +250,7 @@ final class LaserController {
             filter.reset()
             trail.removeAll()
             position = raw
-            if parkedAt == nil { virtualPointer = nil }   // faded out: follow the cursor again
+            if !absorbsMouse { mapsLaser = false }
         } else {
             position = filter.filter(raw, time: now)
             if let last = trail.last, hypot(position.x - last.point.x, position.y - last.point.y) < 0.05 {
@@ -304,7 +268,7 @@ final class LaserController {
         }
 
         CursorHider.setHidden(s.hideCursor && opacity > 0)
-        CursorHider.track(cursor: mouseLocation())
+        CursorHider.track(cursor: NSEvent.mouseLocation)
 
         // Nothing left to animate: stop the display links until the mouse
         // moves again or a setting changes. Covers "laser hidden" and

@@ -187,8 +187,8 @@ final class Settings {
         }
     }
 
-    /// While the laser button shows the laser, keep the real cursor still so
-    /// it doesn't hover or point at anything underneath; only the laser moves.
+    /// While the laser button shows the laser, the overlay takes the mouse so
+    /// the hidden cursor doesn't hover, point at or click anything underneath.
     var detachCursor: Bool {
         get { defaults.object(forKey: "detachCursor") as? Bool ?? true }
         set {

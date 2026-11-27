@@ -87,7 +87,55 @@ enum CursorHider {
     }
 
     /// Which screen edge the Dock is on ("bottom", "left" or "right").
-    private static let dockEdge = UserDefaults(suiteName: "com.apple.dock")?.string(forKey: "orientation") ?? "bottom"
+    static let dockEdge = UserDefaults(suiteName: "com.apple.dock")?.string(forKey: "orientation") ?? "bottom"
+
+    // MARK: Keeping the cursor off the Dock and menu bar
+
+    /// Where the cursor may go while the laser button shows the laser: the
+    /// screen minus the Dock and the menu bar (`visibleFrame`), and never the
+    /// last few points of the Dock edge or the top edge, where an auto-hidden
+    /// Dock or menu bar (full-screen slideshow) would pop up. The Dock and the
+    /// menu bar react to the cursor itself, under any window, so the overlay
+    /// taking the mouse isn't enough there.
+    nonisolated static func pointerArea(frame f: CGRect, visibleFrame v: CGRect, dockEdge: String) -> CGRect {
+        let edge: CGFloat = 3
+        var minX = f.minX, maxX = f.maxX, minY = f.minY
+        let maxY = min(v.maxY, f.maxY - edge)
+        switch dockEdge {
+        case "left": minX = max(v.minX, f.minX + edge)
+        case "right": maxX = min(v.maxX, f.maxX - edge)
+        default: minY = max(v.minY, f.minY + edge)
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// Maps a cursor inside `area` onto the whole `frame`, so the laser still
+    /// reaches the Dock and the menu bar while the cursor stays off them. The
+    /// cursor is hidden, so the small stretch (~12% with a 70 pt Dock, almost
+    /// none in a full-screen slideshow) doesn't show.
+    nonisolated static func laserPoint(for p: CGPoint, area r: CGRect, frame f: CGRect) -> CGPoint {
+        guard r.width > 0, r.height > 0 else { return p }
+        return CGPoint(x: f.minX + (p.x - r.minX) * f.width / r.width,
+                       y: f.minY + (p.y - r.minY) * f.height / r.height)
+    }
+
+    /// For a cursor at `p` while the laser button shows the laser: where to
+    /// put the cursor back to if it left its screen's `pointerArea` (nil if
+    /// it didn't), and where to draw the laser.
+    static func keepOffSystemUI(_ p: CGPoint) -> (cursor: CGPoint?, laser: CGPoint) {
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { return (nil, p) }
+        let r = pointerArea(frame: screen.frame, visibleFrame: screen.visibleFrame, dockEdge: dockEdge)
+        let inside = CGPoint(x: min(max(p.x, r.minX), r.maxX - 1), y: min(max(p.y, r.minY), r.maxY - 1))
+        return (inside == p ? nil : inside, laserPoint(for: inside, area: r, frame: screen.frame))
+    }
+
+    /// Moves the cursor to `p` (AppKit global coordinates).
+    static func warp(to p: CGPoint) {
+        let primaryTop = NSScreen.screens.first?.frame.maxY ?? 0
+        CGWarpMouseCursorPosition(CGPoint(x: p.x, y: primaryTop - p.y))
+        // Without this, real mouse moves are held back for a moment after a warp.
+        CGAssociateMouseAndMouseCursorPosition(1)
+    }
 
     private static var appSwitchObserver: NSObjectProtocol?
 
