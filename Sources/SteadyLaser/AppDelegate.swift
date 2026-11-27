@@ -34,6 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.settings.mode = (self.settings.mode == .off) ? self.settings.lastActiveMode : .off
         }
 
+        // Pressing the laser button twice switches Laser / Spotlight.
+        controller.onDoublePress = { [weak self] in
+            guard let self else { return }
+            self.settings.kind = (self.settings.kind == .laser) ? .spotlight : .laser
+        }
+
         bindLaserButton()
         refreshMenu()
         controller.start()
@@ -244,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(submenu("รูปแบบ", PointerKind.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.kind, #selector(setKind(_:)))
-        }))
+        } + [.separator(), label("กดปุ่มเลเซอร์ 2 ครั้งเพื่อสลับ")]))
         menu.addItem(submenu("รูปแบบเลเซอร์", LaserStyle.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.style, #selector(setStyle(_:)))
         }))

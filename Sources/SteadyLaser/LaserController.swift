@@ -102,15 +102,41 @@ final class LaserController {
     func resetLaserButton() {
         pressHidLaser = false
         setButtonHeld(false)
+        lastHiddenAt = -.infinity
     }
+
+    // MARK: Double press
+
+    /// Called when the button is pressed twice in a row (switches Laser / Spotlight).
+    var onDoublePress: (() -> Void)?
+
+    private var shownAt: CFTimeInterval = -.infinity
+    private var lastHiddenAt: CFTimeInterval = -.infinity
+    private var lastShownFor: CFTimeInterval = .infinity
+
+    /// A double press is a short press followed by another one soon after.
+    /// The remote turns a fast double click into a single ⌃L … ⌃A it handles
+    /// itself, so only two separate presses are seen; measured on the Norwii:
+    /// first press shown ~0.7 s, next press ~0.7 s after the release.
+    private let doublePressFirstMax: CFTimeInterval = 1.2
+    private let doublePressGapMax: CFTimeInterval = 1.0
 
     private func setButtonHeld(_ held: Bool) {
         guard held != buttonHeld else { return }
         buttonHeld = held
+        let now = CACurrentMediaTime()
         if held {
             // Start fresh at the cursor, no tail sweeping in from the old spot.
             filter.reset()
             trail.removeAll()
+            if lastShownFor < doublePressFirstMax, now - lastHiddenAt < doublePressGapMax {
+                lastHiddenAt = -.infinity   // a third press starts over
+                onDoublePress?()
+            }
+            shownAt = now
+        } else {
+            lastHiddenAt = now
+            lastShownFor = now - shownAt
         }
         wake()
     }
