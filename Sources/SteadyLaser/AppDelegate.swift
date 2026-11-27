@@ -273,7 +273,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(submenu("รูปแบบ", PointerKind.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.kind, #selector(setKind(_:)))
-        } + [.separator(), label("กดปุ่มเลเซอร์ 2 ครั้งเพื่อสลับ")]))
+        } + [
+            .separator(),
+            label("สลับ: กด Pointer 2 ครั้ง เว้นราวครึ่งวินาที"),
+            label("Pointer ไม่ตอบสนอง? ดับเบิลคลิกเร็วๆ 1 ครั้ง"),
+        ]))
         menu.addItem(submenu("รูปแบบเลเซอร์", LaserStyle.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.style, #selector(setStyle(_:)))
         }))

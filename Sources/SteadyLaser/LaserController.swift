@@ -118,12 +118,18 @@ final class LaserController {
     private var lastShownFor: CFTimeInterval = .infinity
     private var secondOfDouble = false
 
-    /// A double press is a short press followed by another one soon after.
-    /// The remote turns a fast double click into a single ⌃L … ⌃A it handles
-    /// itself, so only two separate presses are seen; measured on the Norwii:
-    /// first press shown ~0.7 s, next press ~0.7 s after the release.
-    private let doublePressFirstMax: CFTimeInterval = 1.2
-    private let doublePressGapMax: CFTimeInterval = 1.0
+    /// A double press is a short press, then another one after a pause of
+    /// about half a second to a second and a half. It must be slow: the
+    /// Norwii remote keeps a fast double click of Pointer for itself, to
+    /// switch its own mode, and in its other mode Pointer sends nothing at
+    /// all (no laser until it's double clicked back). The gap is measured
+    /// from ⌃A to the laser showing, which is 0.1 s after ⌃L.
+    /// Measured on 10 slow double presses: the remote sends ⌃A 0.7–1.0 s
+    /// after a short press is let go, so a first press shows for 0.7–1.6 s;
+    /// gaps were 0.7–1.4 s.
+    private let doublePressFirstMax: CFTimeInterval = 1.8
+    private let doublePressGapMin: CFTimeInterval = 0.6
+    private let doublePressGapMax: CFTimeInterval = 1.6
 
     private func setButtonHeld(_ held: Bool) {
         guard held != buttonHeld else { return }
@@ -133,7 +139,8 @@ final class LaserController {
             // Start fresh at the cursor, no tail sweeping in from the old spot.
             filter.reset()
             trail.removeAll()
-            secondOfDouble = lastShownFor < doublePressFirstMax && now - lastHiddenAt < doublePressGapMax
+            let gap = now - lastHiddenAt
+            secondOfDouble = lastShownFor < doublePressFirstMax && gap >= doublePressGapMin && gap < doublePressGapMax
             if secondOfDouble { onDoublePress?() }
             shownAt = now
         } else {
