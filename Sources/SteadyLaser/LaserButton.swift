@@ -78,21 +78,41 @@ enum LaserButton: Equatable {
     static let norwiiPointer = LaserButton.modifier(
         code: kVK_Control, device: InputDevice(vendorID: InputDevice.norwiiVendorID, productID: 0, name: "Norwii"))
 
-    /// On a Norwii remote only the Pointer key (its Control, from ⌃L / ⌃A) can
-    /// be the laser button. Its other keys send things slides need (Page Up /
-    /// Down, B, E, ⌘ shortcuts), and as a laser button each of their presses
-    /// would latch the laser on until the next one.
-    static func allowed(_ button: LaserButton, from device: InputDevice?) -> Bool {
-        guard let device, device.isNorwii else { return true }
-        if case .modifier(kVK_Control, _) = button { return true }
-        return false
+    /// The Norwii Pointer key sends PowerPoint's laser shortcut when a hold
+    /// starts and ends: with ⌃ in the remote's Windows mode (⌃L … ⌃A) and with
+    /// ⌘ in its Mac mode. Either modifier is the Pointer key.
+    static let norwiiPointerModifiers: Set<Int> = [kVK_Control, kVK_Command]
+
+    /// Modifier keys that trigger this button: both of the Pointer key's for a
+    /// Norwii remote, so it keeps working when the remote switches mode.
+    var modifierCodes: Set<Int> {
+        guard case let .modifier(code, device) = self else { return [] }
+        if let device, device.isNorwii, Self.norwiiPointerModifiers.contains(code) { return Self.norwiiPointerModifiers }
+        return [code]
     }
+
+    /// On a Norwii remote only the Pointer key can be the laser button. Its
+    /// other keys send things slides need (Page Up / Down, B, E), and as a
+    /// laser button each of their presses would latch the laser on.
+    /// The Mac's built-in keyboard (no vendor ID) can't give a modifier: ⌘ / ⌃
+    /// there are in every shortcut, and each quick one would latch the laser on.
+    static func allowed(_ button: LaserButton, from device: InputDevice?) -> Bool {
+        guard let device else { return true }
+        if device.isNorwii {
+            if case let .modifier(code, _) = button, norwiiPointerModifiers.contains(code) { return true }
+            return false
+        }
+        if case .modifier = button, device.vendorID == 0 { return false }
+        return true
+    }
+
+    static let allModifierFlags: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
 
     var title: String {
         switch self {
         case .key(_, _, let name): name
         case let .modifier(code, device):
-            (Self.modifierKeys[code]?.name ?? "keyCode \(code)")
+            (modifierCodes.count > 1 ? "ปุ่ม Pointer (⌃ / ⌘)" : (Self.modifierKeys[code]?.name ?? "keyCode \(code)"))
                 + (device.map { $0.name.isEmpty ? "" : " จาก \($0.name)" } ?? "")
         case .mouse(let button): "ปุ่มเมาส์ \(button + 1)"
         }
@@ -196,6 +216,9 @@ final class ButtonCapture: NSObject, NSWindowDelegate {
     /// A person needs well over this to add a key to a held modifier; the
     /// Norwii remote sends ⌃L with 7–17 ms between Control and L.
     private let remoteChordGap: TimeInterval = 0.05
+    /// A bare modifier tap counts only if it's this quick: the remote's last
+    /// 15–40 ms, while a person's ⌘ (⌘Tab out of this window, say) is longer.
+    private let remoteTapMax: TimeInterval = 0.06
 
     func begin(completion: @escaping (LaserButton?) -> Void) {
         finish(nil)
@@ -253,11 +276,14 @@ final class ButtonCapture: NSObject, NSWindowDelegate {
             let code = Int(event.keyCode)
             if down {
                 // Only a modifier pressed on its own counts, not one joining others.
-                let held = event.modifierFlags.intersection([.command, .option, .control, .shift, .function])
+                let held = event.modifierFlags.intersection(LaserButton.allModifierFlags)
                 let alone = held == LaserButton.modifierKeys[code]?.flag
                 pendingModifier = alone ? (code, InputDevice.of(event), event.timestamp) : nil
             } else if let pending = pendingModifier, pending.code == code {
-                accept(.modifier(code: code, device: pending.device), from: pending.device)
+                pendingModifier = nil
+                if event.timestamp - pending.at <= remoteTapMax {
+                    accept(.modifier(code: code, device: pending.device), from: pending.device)
+                }
             }
             return false
         default:
