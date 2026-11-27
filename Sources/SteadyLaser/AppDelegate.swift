@@ -107,6 +107,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Another modifier joined while a press was pending: it's another key's
+    /// shortcut (⌘⇧…), not the Pointer key. Drop the press.
+    private func remoteOtherModifier() {
+        pendingPress?.cancel()
+        pendingPress = nil
+    }
+
     private func remoteMouseDown() {
         guard let pending = pendingPress else { return }
         pending.cancel()
@@ -128,7 +135,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         unbindLaserButton()
         laserButtonError = nil
         // No button set: use the Norwii pointer key (⌃L … ⌃A from any Norwii remote).
-        let binding = settings.laserButton ?? LaserButton.norwiiPointer
+        var binding = settings.laserButton ?? LaserButton.norwiiPointer
+        if case let .modifier(_, device) = binding, !LaserButton.allowed(binding, from: device) {
+            // A Norwii key other than Pointer, saved before the learn window
+            // refused them: every press latched the laser on. Back to Pointer.
+            settings.laserButton = nil
+            binding = .norwiiPointer
+        }
 
         switch binding {
         case let .key(code, modifiers, _):
@@ -141,15 +154,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 laserButtonError = "ปุ่มนี้ถูกแอปอื่นจองไว้ ลองตั้งปุ่มใหม่"
             }
 
-        case let .modifier(code, device):
+        case let .modifier(_, device):
             // Not a hotkey: the keys still reach other apps untouched.
+            let codes = binding.modifierCodes
             monitor(.flagsChanged) { [weak self] e in
-                guard Int(e.keyCode) == code, let down = LaserButton.modifierIsDown(e) else { return }
+                guard let down = LaserButton.modifierIsDown(e) else { return }
+                let key = Int(e.keyCode)
                 MainActor.assumeIsolated {
+                    guard let self else { return }
                     // Only the remote it was learned from, not the Mac keyboard's
-                    // Control. Unknown senders are let through.
+                    // modifiers. Unknown senders are let through.
                     if let device, let from = InputDevice.of(e), !from.isSameMaker(as: device) { return }
-                    self?.modifierButton(down: down)
+                    if codes.contains(key) {
+                        // On its own only: ⌘⇧… / ⌃⇧… come from the remote's other keys.
+                        let alone = e.modifierFlags.intersection(LaserButton.allModifierFlags) == LaserButton.modifierKeys[key]?.flag
+                        if down && !alone { return }
+                        self.modifierButton(down: down)
+                    } else if down {
+                        self.remoteOtherModifier()
+                    }
                 }
             }
             if let device {
@@ -244,7 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let laserButtonError { menu.addItem(label("⚠︎ " + laserButtonError)) }
         menu.addItem(action(settings.laserButton == nil ? "ตั้งปุ่มเลเซอร์…" : "เปลี่ยนปุ่มเลเซอร์…", #selector(learnLaserButton(_:))))
         if settings.laserButton != nil {
-            menu.addItem(action("ล้างปุ่มเลเซอร์", #selector(clearLaserButton(_:))))
+            menu.addItem(action("กลับไปใช้ปุ่ม Pointer ของ Norwii", #selector(clearLaserButton(_:))))
         }
         menu.addItem(.separator())
 

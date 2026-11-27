@@ -36,9 +36,36 @@ final class LaserButtonTests: XCTestCase {
         XCTAssertTrue(macKeyboard.isSameMaker(as: macKeyboard))
     }
 
+    /// Only the Pointer key (⌃ in the remote's Windows mode, ⌘ in its Mac mode)
+    /// of a Norwii remote may be the laser button.
+    func testOnlyNorwiiPointerIsAllowed() {
+        XCTAssertTrue(LaserButton.allowed(.modifier(code: kVK_Control, device: dongle), from: dongle))
+        XCTAssertTrue(LaserButton.allowed(.norwiiPointer, from: bluetooth))
+        XCTAssertTrue(LaserButton.allowed(.modifier(code: kVK_Command, device: dongle), from: dongle), "Mac mode sends ⌘")
+        XCTAssertFalse(LaserButton.allowed(.modifier(code: kVK_Shift, device: dongle), from: dongle))
+        XCTAssertFalse(LaserButton.allowed(.key(code: kVK_PageDown, modifiers: 0, name: "Page Down"), from: dongle))
+        XCTAssertFalse(LaserButton.allowed(.mouse(button: 3), from: bluetooth))
+        // The Mac keyboard's modifiers are in every shortcut: never a laser button.
+        XCTAssertFalse(LaserButton.allowed(.modifier(code: kVK_RightCommand, device: macKeyboard), from: macKeyboard))
+        XCTAssertTrue(LaserButton.allowed(.key(code: kVK_F5, modifiers: 0, name: "F5"), from: macKeyboard))
+        // Other devices are unrestricted.
+        let otherRemote = InputDevice(vendorID: 0x046d, productID: 0xc53f, name: "Other Presenter")
+        XCTAssertTrue(LaserButton.allowed(.modifier(code: kVK_RightOption, device: otherRemote), from: otherRemote))
+        XCTAssertTrue(LaserButton.allowed(.key(code: kVK_F5, modifiers: 0, name: "F5"), from: nil))
+    }
+
+    /// Either Pointer modifier triggers a Norwii binding, whichever was learned.
+    func testNorwiiPointerAnswersToControlAndCommand() {
+        let both: Set<Int> = [kVK_Control, kVK_Command]
+        XCTAssertEqual(LaserButton.norwiiPointer.modifierCodes, both)
+        XCTAssertEqual(LaserButton.modifier(code: kVK_Command, device: bluetooth).modifierCodes, both)
+        XCTAssertEqual(LaserButton.modifier(code: kVK_Control, device: macKeyboard).modifierCodes, [kVK_Control])
+        XCTAssertEqual(LaserButton.mouse(button: 3).modifierCodes, [])
+    }
+
     func testTitles() {
         XCTAssertEqual(LaserButton.mouse(button: 3).title, "ปุ่มเมาส์ 4")
-        XCTAssertEqual(LaserButton.modifier(code: kVK_Control, device: dongle).title, "Control (⌃) จาก BLE Presenter Dongle")
+        XCTAssertEqual(LaserButton.modifier(code: kVK_Command, device: dongle).title, "ปุ่ม Pointer (⌃ / ⌘) จาก BLE Presenter Dongle")
         XCTAssertEqual(LaserButton.modifier(code: kVK_RightOption, device: nil).title, "Option ขวา (⌥)")
     }
 }
