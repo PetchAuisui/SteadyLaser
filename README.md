@@ -62,7 +62,14 @@
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --selftest              # วัดตัวกรอง
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot-capture p.png # เรนเดอร์หน้าต่างตั้งปุ่ม
 "build/Steady Laser.app/Contents/MacOS/SteadyLaser" --snapshot-spotlight s.png # เรนเดอร์สปอตไลต์ทุกขนาดบนสไลด์ตัวอย่าง
+swift test                                                                    # รัน unit test
 ```
+
+### Unit test และ CI
+
+- `swift test` ทดสอบตัวกรอง One Euro (ระดับ "กลาง" ต้องลดการสั่นได้เกิน 85% และตามหลังไม่เกิน 15 ms), การบันทึกปุ่มเลเซอร์, การจับคู่รีโมตด้วย vendor ID และจังหวะกด/กดค้าง/กด 2 ครั้ง ของปุ่มเลเซอร์ ด้วยนาฬิกาจำลอง
+- GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) รันทุก pull request และทุกครั้งที่ push เข้า `main` ขั้นตอนคือ build แบบ release, unit test, `--selftest`, สร้าง `.app` ด้วย `./build.sh` และเรนเดอร์ snapshot ทั้งสามแบบ
+- ไฟล์ `SteadyLaser.zip` (แอปที่ sign แบบ ad-hoc) และรูป snapshot ดาวน์โหลดได้จากหน้า run ของ Actions เก็บไว้ 14 วัน
 
 ## โครงสร้างโค้ด
 
