@@ -23,9 +23,6 @@ enum PointerKind: String, CaseIterable {
         case .spotlight: "สปอตไลต์ หรี่จอรอบวงกลม (Spotlight)"
         }
     }
-
-    /// How dark the screen gets outside the spotlight.
-    static let spotlightShade: CGFloat = 0.7
 }
 
 /// How the laser dot looks.
@@ -94,6 +91,34 @@ enum SpotlightSize: String, CaseIterable {
         case .small: self = .small
         case .medium: self = .medium
         case .large: self = .large
+        }
+    }
+}
+
+/// How dark the screen gets outside the spotlight circle.
+enum SpotlightShade: String, CaseIterable {
+    case lightest, light, medium, dark, darkest
+
+    var title: String {
+        let percent = Int((alpha * 100).rounded())
+        switch self {
+        case .lightest: return "จางมาก (\(percent)%)"
+        case .light: return "จาง (\(percent)%)"
+        case .medium: return "กลาง (\(percent)%)"
+        case .dark: return "เข้ม (\(percent)%)"
+        case .darkest: return "เข้มมาก (\(percent)%)"
+        }
+    }
+
+    /// Opacity of the black outside the circle. Medium is the spotlight's
+    /// shade from before it could be set.
+    var alpha: CGFloat {
+        switch self {
+        case .lightest: 0.3
+        case .light: 0.5
+        case .medium: 0.7
+        case .dark: 0.85
+        case .darkest: 0.95
         }
     }
 }
@@ -205,6 +230,11 @@ final class Settings {
     var spotlightSize: SpotlightSize {
         get { value("spotlightSize", SpotlightSize(matching: size)) }
         set { store(newValue, "spotlightSize") }
+    }
+
+    var spotlightShade: SpotlightShade {
+        get { value("spotlightShade", .medium) }
+        set { store(newValue, "spotlightShade") }
     }
 
     var color: LaserColor {

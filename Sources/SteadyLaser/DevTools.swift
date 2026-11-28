@@ -61,24 +61,36 @@ enum DevTools {
         print("wrote \(path)")
     }
 
-    /// Renders the spotlight at each size over a mock slide, one panel per size.
+    /// Renders the spotlight over a mock slide: each size (left column, medium
+    /// shade) and each shade (right column, medium size), one panel apiece.
     static func snapshotSpotlight(to path: String) {
         let slide = CGSize(width: 640, height: 360)
         let scale: CGFloat = 2
+        typealias Panel = (column: Int, row: Int, label: String, radius: CGFloat, shade: CGFloat)
+        let panels: [Panel] =
+            SpotlightSize.allCases.enumerated().map {
+                (0, $0.offset, $0.element.rawValue, $0.element.radius, SpotlightShade.medium.alpha)
+            } + SpotlightShade.allCases.enumerated().map {
+                (1, $0.offset, "\($0.element.rawValue) \(Int(($0.element.alpha * 100).rounded()))%",
+                 SpotlightSize.medium.radius, $0.element.alpha)
+            }
+        let columns = (panels.map(\.column).max() ?? 0) + 1
+        let rows = (panels.map(\.row).max() ?? 0) + 1
         let root = CALayer()
-        root.frame = CGRect(x: 0, y: 0, width: slide.width, height: slide.height * CGFloat(SpotlightSize.allCases.count))
+        root.frame = CGRect(x: 0, y: 0, width: slide.width * CGFloat(columns), height: slide.height * CGFloat(rows))
         root.isGeometryFlipped = true
 
-        for (i, size) in SpotlightSize.allCases.enumerated() {
+        for panel in panels {
             let back = CALayer()
-            back.frame = CGRect(x: 0, y: CGFloat(i) * slide.height, width: slide.width, height: slide.height)
+            back.frame = CGRect(x: CGFloat(panel.column) * slide.width, y: CGFloat(panel.row) * slide.height,
+                                width: slide.width, height: slide.height)
             back.backgroundColor = NSColor.white.cgColor
             back.masksToBounds = true
             root.addSublayer(back)
 
             // A fake slide: title, a few bullet bars and a chart.
             let title = CATextLayer()
-            title.string = "Quarterly results (\(size.rawValue))"
+            title.string = "Quarterly results (\(panel.label))"
             title.fontSize = 30
             title.foregroundColor = NSColor(white: 0.1, alpha: 1).cgColor
             title.contentsScale = scale
@@ -99,7 +111,8 @@ enum DevTools {
             }
 
             let r = LaserRenderer()
-            r.configure(kind: .spotlight, style: .comet, radius: LaserSize.medium.radius, spotlightRadius: size.radius,
+            r.configure(kind: .spotlight, style: .comet, radius: LaserSize.medium.radius,
+                        spotlightRadius: panel.radius, spotlightShade: panel.shade,
                         color: LaserColor.red.color, scale: scale, canvas: slide)
             back.addSublayer(r.container)
             r.update(point: CGPoint(x: 460, y: 200), opacity: 1, trail: [], now: 0, trailDuration: 0.12)

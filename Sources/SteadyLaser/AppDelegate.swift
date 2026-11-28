@@ -279,20 +279,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             label("สลับ: กด Pointer 2 ครั้ง เว้นราวครึ่งวินาที"),
             label("Pointer ไม่ตอบสนอง? ดับเบิลคลิกเร็วๆ 1 ครั้ง"),
         ]))
-        menu.addItem(submenu("รูปแบบเลเซอร์", LaserStyle.allCases.map {
-            choice($0.title, $0.rawValue, selected: $0 == settings.style, #selector(setStyle(_:)))
-        }))
-        menu.addItem(submenu("สี", LaserColor.allCases.map {
-            let item = choice($0.title, $0.rawValue, selected: $0 == settings.color, #selector(setColor(_:)))
-            item.image = swatch($0.color)
-            return item
-        }))
-        menu.addItem(submenu("ขนาดเลเซอร์", LaserSize.allCases.map {
-            choice($0.title, $0.rawValue, selected: $0 == settings.size, #selector(setSize(_:)))
-        }))
-        menu.addItem(submenu("ขนาดสปอตไลต์", SpotlightSize.allCases.map {
-            choice($0.title, $0.rawValue, selected: $0 == settings.spotlightSize, #selector(setSpotlightSize(_:)))
-        }))
+        // Only the settings for what the pointer shows now. The menu is
+        // rebuilt on every change, so switching Laser / Spotlight swaps them.
+        switch settings.kind {
+        case .laser:
+            menu.addItem(submenu("รูปแบบเลเซอร์", LaserStyle.allCases.map {
+                choice($0.title, $0.rawValue, selected: $0 == settings.style, #selector(setStyle(_:)))
+            }))
+            menu.addItem(submenu("สี", LaserColor.allCases.map {
+                let item = choice($0.title, $0.rawValue, selected: $0 == settings.color, #selector(setColor(_:)))
+                item.image = swatch($0.color)
+                return item
+            }))
+            menu.addItem(submenu("ขนาดเลเซอร์", LaserSize.allCases.map {
+                choice($0.title, $0.rawValue, selected: $0 == settings.size, #selector(setSize(_:)))
+            }))
+        case .spotlight:
+            menu.addItem(submenu("ขนาดสปอตไลต์", SpotlightSize.allCases.map {
+                choice($0.title, $0.rawValue, selected: $0 == settings.spotlightSize, #selector(setSpotlightSize(_:)))
+            }))
+            menu.addItem(submenu("ความทึบสปอตไลต์", SpotlightShade.allCases.map {
+                choice($0.title, $0.rawValue, selected: $0 == settings.spotlightShade, #selector(setSpotlightShade(_:)))
+            }))
+        }
         menu.addItem(submenu("ความนิ่ง", Stability.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.stability, #selector(setStability(_:)))
         }))
@@ -363,6 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func setColor(_ sender: NSMenuItem) { if let v = LaserColor(rawValue: raw(sender)) { settings.color = v } }
     @objc private func setSize(_ sender: NSMenuItem) { if let v = LaserSize(rawValue: raw(sender)) { settings.size = v } }
     @objc private func setSpotlightSize(_ sender: NSMenuItem) { if let v = SpotlightSize(rawValue: raw(sender)) { settings.spotlightSize = v } }
+    @objc private func setSpotlightShade(_ sender: NSMenuItem) { if let v = SpotlightShade(rawValue: raw(sender)) { settings.spotlightShade = v } }
     @objc private func setStability(_ sender: NSMenuItem) { if let v = Stability(rawValue: raw(sender)) { settings.stability = v } }
     @objc private func toggleHideCursor(_ sender: NSMenuItem) { settings.hideCursor.toggle() }
     @objc private func toggleDetachCursor(_ sender: NSMenuItem) { settings.detachCursor.toggle() }
