@@ -66,10 +66,10 @@ enum DevTools {
         let slide = CGSize(width: 640, height: 360)
         let scale: CGFloat = 2
         let root = CALayer()
-        root.frame = CGRect(x: 0, y: 0, width: slide.width, height: slide.height * CGFloat(LaserSize.allCases.count))
+        root.frame = CGRect(x: 0, y: 0, width: slide.width, height: slide.height * CGFloat(SpotlightSize.allCases.count))
         root.isGeometryFlipped = true
 
-        for (i, size) in LaserSize.allCases.enumerated() {
+        for (i, size) in SpotlightSize.allCases.enumerated() {
             let back = CALayer()
             back.frame = CGRect(x: 0, y: CGFloat(i) * slide.height, width: slide.width, height: slide.height)
             back.backgroundColor = NSColor.white.cgColor
@@ -99,7 +99,8 @@ enum DevTools {
             }
 
             let r = LaserRenderer()
-            r.configure(kind: .spotlight, style: .comet, radius: size.radius, color: LaserColor.red.color, scale: scale, canvas: slide)
+            r.configure(kind: .spotlight, style: .comet, radius: LaserSize.medium.radius, spotlightRadius: size.radius,
+                        color: LaserColor.red.color, scale: scale, canvas: slide)
             back.addSublayer(r.container)
             r.update(point: CGPoint(x: 460, y: 200), opacity: 1, trail: [], now: 0, trailDuration: 0.12)
         }

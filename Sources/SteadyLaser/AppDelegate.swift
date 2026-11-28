@@ -287,8 +287,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.image = swatch($0.color)
             return item
         }))
-        menu.addItem(submenu("ขนาด", LaserSize.allCases.map {
+        menu.addItem(submenu("ขนาดเลเซอร์", LaserSize.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.size, #selector(setSize(_:)))
+        }))
+        menu.addItem(submenu("ขนาดสปอตไลต์", SpotlightSize.allCases.map {
+            choice($0.title, $0.rawValue, selected: $0 == settings.spotlightSize, #selector(setSpotlightSize(_:)))
         }))
         menu.addItem(submenu("ความนิ่ง", Stability.allCases.map {
             choice($0.title, $0.rawValue, selected: $0 == settings.stability, #selector(setStability(_:)))
@@ -359,6 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func setStyle(_ sender: NSMenuItem) { if let v = LaserStyle(rawValue: raw(sender)) { settings.style = v } }
     @objc private func setColor(_ sender: NSMenuItem) { if let v = LaserColor(rawValue: raw(sender)) { settings.color = v } }
     @objc private func setSize(_ sender: NSMenuItem) { if let v = LaserSize(rawValue: raw(sender)) { settings.size = v } }
+    @objc private func setSpotlightSize(_ sender: NSMenuItem) { if let v = SpotlightSize(rawValue: raw(sender)) { settings.spotlightSize = v } }
     @objc private func setStability(_ sender: NSMenuItem) { if let v = Stability(rawValue: raw(sender)) { settings.stability = v } }
     @objc private func toggleHideCursor(_ sender: NSMenuItem) { settings.hideCursor.toggle() }
     @objc private func toggleDetachCursor(_ sender: NSMenuItem) { settings.detachCursor.toggle() }

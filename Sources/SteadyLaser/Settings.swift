@@ -24,8 +24,6 @@ enum PointerKind: String, CaseIterable {
         }
     }
 
-    /// Spotlight circle radius = laser dot radius × this (small 90, medium 135, large 195 pt).
-    static let spotlightScale: CGFloat = 15
     /// How dark the screen gets outside the spotlight.
     static let spotlightShade: CGFloat = 0.7
 }
@@ -60,6 +58,42 @@ enum LaserSize: String, CaseIterable {
         case .small: 6
         case .medium: 9
         case .large: 13
+        }
+    }
+}
+
+/// Size of the clear circle the spotlight leaves around the pointer.
+enum SpotlightSize: String, CaseIterable {
+    case xsmall, small, medium, large, xlarge
+
+    var title: String {
+        switch self {
+        case .xsmall: "เล็กมาก"
+        case .small: "เล็ก"
+        case .medium: "กลาง"
+        case .large: "ใหญ่"
+        case .xlarge: "ใหญ่มาก"
+        }
+    }
+
+    /// Radius of the clear circle, in points. Small, medium and large are
+    /// the sizes the spotlight had when it followed the laser size.
+    var radius: CGFloat {
+        switch self {
+        case .xsmall: 60
+        case .small: 90
+        case .medium: 135
+        case .large: 195
+        case .xlarge: 280
+        }
+    }
+
+    /// The spotlight used to follow the laser size: start from the same circle.
+    init(matching size: LaserSize) {
+        switch size {
+        case .small: self = .small
+        case .medium: self = .medium
+        case .large: self = .large
         }
     }
 }
@@ -166,6 +200,11 @@ final class Settings {
     var size: LaserSize {
         get { value("laserSize", .medium) }
         set { store(newValue, "laserSize") }
+    }
+
+    var spotlightSize: SpotlightSize {
+        get { value("spotlightSize", SpotlightSize(matching: size)) }
+        set { store(newValue, "spotlightSize") }
     }
 
     var color: LaserColor {

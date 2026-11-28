@@ -75,6 +75,7 @@ final class LaserView: NSView {
             kind: s.kind,
             style: s.style,
             radius: s.size.radius,
+            spotlightRadius: s.spotlightSize.radius,
             color: s.color.color,
             scale: window?.backingScaleFactor ?? 2,
             canvas: bounds.size
