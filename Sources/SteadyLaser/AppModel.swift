@@ -6,7 +6,11 @@ import ServiceManagement
 /// `changed()` whenever anything shown here may have changed.
 @MainActor
 final class AppModel: ObservableObject {
-    let settings = Settings.shared
+    let settings: Settings
+
+    init(settings: Settings? = nil) {
+        self.settings = settings ?? .shared
+    }
 
     /// Why the laser button couldn't be bound, if it couldn't.
     var laserButtonError: String?

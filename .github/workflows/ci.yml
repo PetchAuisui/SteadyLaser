@@ -45,7 +45,8 @@ jobs:
           "$APP" --snapshot snapshots/styles.png
           "$APP" --snapshot-spotlight snapshots/spotlight.png
           "$APP" --snapshot-capture snapshots/capture-panel.png
-          for f in styles spotlight capture-panel; do
+          "$APP" --snapshot-settings snapshots/settings.png
+          for f in styles spotlight capture-panel settings; do
             test -s "snapshots/$f.png" || { echo "::error::snapshots/$f.png was not written"; exit 1; }
           done
 

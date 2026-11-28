@@ -19,6 +19,10 @@ MainActor.assumeIsolated {
         DevTools.snapshotCapturePanel(to: args[i + 1])
         exit(0)
     }
+    if let i = args.firstIndex(of: "--snapshot-settings"), i + 1 < args.count {
+        DevTools.snapshotSettings(to: args[i + 1])
+        exit(0)
+    }
     if args.contains("--selftest") {
         DevTools.selfTest()
         exit(0)
