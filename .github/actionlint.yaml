@@ -1,0 +1,6 @@
+# GitHub-hosted runner labels newer than actionlint's built-in list.
+self-hosted-runner:
+  labels:
+    - macos-15-intel
+    - macos-26
+    - xcode-27

@@ -201,11 +201,15 @@ struct SettingsView: View {
     /// One slider step per case of a setting's choices.
     private func step<T: CaseIterable & Equatable>(_ key: ReferenceWritableKeyPath<Settings, T>) -> Binding<Double>
     where T.AllCases == [T] {
-        let all = T.allCases
         let choice = bind(key)
+        // Each closure reads the cases itself rather than sharing one array,
+        // which Swift 6 can't prove safe to send.
         return Binding(
-            get: { Double(all.firstIndex(of: choice.wrappedValue) ?? 0) },
-            set: { choice.wrappedValue = all[min(max(Int($0.rounded()), 0), all.count - 1)] }
+            get: { Double(T.allCases.firstIndex(of: choice.wrappedValue) ?? 0) },
+            set: {
+                let all = T.allCases
+                choice.wrappedValue = all[min(max(Int($0.rounded()), 0), all.count - 1)]
+            }
         )
     }
 }
