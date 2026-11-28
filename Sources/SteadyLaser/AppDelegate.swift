@@ -5,13 +5,14 @@ import ServiceManagement
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = Settings.shared
+    private let model = AppModel()
+    private lazy var settingsWindow = SettingsWindow(model: model)
     private let controller = LaserController()
     private let capture = ButtonCapture()
     private var statusItem: NSStatusItem!
 
     private var laserButtonHotKey: UInt32?
     private var laserButtonMonitors: [Any] = []
-    private var laserButtonError: String?
     private var modifierButtonDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -24,9 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settings.onChange = { [weak self] in
             guard let self else { return }
-            self.refreshMenu()
+            self.refresh()
             self.controller.settingsChanged()
         }
+
+        model.learnLaserButton = { [weak self] in self?.learnLaserButton(nil) }
+        model.clearLaserButton = { [weak self] in self?.clearLaserButton(nil) }
+        model.toggleLaunchAtLogin = { [weak self] in self?.toggleLaunchAtLogin(nil) }
 
         // ⌃⌥L toggles the laser on/off.
         HotKeyCenter.shared.register(keyCode: kVK_ANSI_L, modifiers: controlKey | optionKey) { [weak self] in
@@ -40,9 +45,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.settings.kind = (self.settings.kind == .laser) ? .spotlight : .laser
         }
 
+        controller.quietArea = { [weak self] in self?.settingsWindow.visibleFrame }
+
+        installMainMenu()
         bindLaserButton()
-        refreshMenu()
+        refresh()
         controller.start()
+
+        // Opened by the user: show what the app does and how it's set up.
+        // Opened by macOS at login: stay quietly in the menu bar.
+        if !launchedAsLoginItem { settingsWindow.show() }
+    }
+
+    /// Whether macOS opened the app as a login item, read from the event
+    /// that launched it.
+    private var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventID == kAEOpenApplication
+        else { return false }
+        return event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+    }
+
+    /// Opening the app again (Finder, Spotlight, Launchpad) while it runs
+    /// shows the settings window too.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        settingsWindow.show()
+        return false
+    }
+
+    @objc private func openSettings(_ sender: Any?) {
+        settingsWindow.show()
+    }
+
+    /// Never on screen (menu bar app), but gives the settings window the
+    /// usual keys: ⌘, ⌘W ⌘M ⌘Q.
+    private func installMainMenu() {
+        let app = NSMenu()
+        let open = action("ตั้งค่า…", #selector(openSettings(_:)))
+        open.keyEquivalent = ","
+        app.addItem(open)
+        app.addItem(.separator())
+        app.addItem(NSMenuItem(title: "ออก", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        let window = NSMenu(title: "หน้าต่าง")
+        window.addItem(NSMenuItem(title: "ปิด", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        window.addItem(NSMenuItem(title: "ย่อ", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+
+        let main = NSMenu()
+        for sub in [app, window] {
+            let item = NSMenuItem()
+            item.submenu = sub
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -134,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func bindLaserButton() {
         unbindLaserButton()
-        laserButtonError = nil
+        model.laserButtonError = nil
         // No button set: use the Norwii pointer key (⌃L … ⌃A from any Norwii remote).
         var binding = settings.laserButton ?? LaserButton.norwiiPointer
         if case let .modifier(_, device) = binding, !LaserButton.allowed(binding, from: device) {
@@ -152,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onRelease: { [weak self] in self?.controller.laserButtonReleased() }
             )
             if laserButtonHotKey == nil {
-                laserButtonError = "ปุ่มนี้ถูกแอปอื่นจองไว้ ลองตั้งปุ่มใหม่"
+                model.laserButtonError = "ปุ่มนี้ถูกแอปอื่นจองไว้ ลองตั้งปุ่มใหม่"
             }
 
         case let .modifier(_, device):
@@ -211,23 +266,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if switchToHold { self.settings.mode = .hold }
             }
             self.bindLaserButton()
-            self.refreshMenu()
+            self.refresh()
         }
     }
 
     @objc private func clearLaserButton(_ sender: Any?) {
         settings.laserButton = nil
         bindLaserButton()
-        refreshMenu()
+        refresh()
     }
 
     // MARK: - Launch at login
 
-    private var launchesAtLogin: Bool { SMAppService.mainApp.status == .enabled }
-
     @objc private func toggleLaunchAtLogin(_ sender: Any?) {
         do {
-            if launchesAtLogin {
+            if model.launchesAtLogin {
                 try SMAppService.mainApp.unregister()
             } else {
                 try SMAppService.mainApp.register()
@@ -242,13 +295,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if SMAppService.mainApp.status == .requiresApproval {
             SMAppService.openSystemSettingsLoginItems()
         }
-        refreshMenu()
+        refresh()
     }
 
     // MARK: - Menu
 
-    private func refreshMenu() {
+    /// Something the menu or the settings window shows may have changed.
+    private func refresh() {
         statusItem.menu = buildMenu()
+        model.changed()
     }
 
     private func buildMenu() -> NSMenu {
@@ -265,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         menu.addItem(label("ปุ่มเลเซอร์บนรีโมต: " + (settings.laserButton?.title ?? "ปุ่ม pointer ของรีโมต Norwii")))
-        if let laserButtonError { menu.addItem(label("⚠︎ " + laserButtonError)) }
+        if let error = model.laserButtonError { menu.addItem(label("⚠︎ " + error)) }
         menu.addItem(action(settings.laserButton == nil ? "ตั้งปุ่มเลเซอร์…" : "เปลี่ยนปุ่มเลเซอร์…", #selector(learnLaserButton(_:))))
         if settings.laserButton != nil {
             menu.addItem(action("กลับไปใช้ปุ่ม Pointer ของ Norwii", #selector(clearLaserButton(_:))))
@@ -315,10 +370,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(detach)
 
         let login = action("เปิดอัตโนมัติตอนเข้าเครื่อง", #selector(toggleLaunchAtLogin(_:)))
-        login.state = launchesAtLogin ? .on : .off
+        login.state = model.launchesAtLogin ? .on : .off
         menu.addItem(login)
 
         menu.addItem(.separator())
+        let open = action("ตั้งค่า…", #selector(openSettings(_:)))
+        open.keyEquivalent = ","
+        menu.addItem(open)
         menu.addItem(label("เปิด/ปิดเลเซอร์: ⌃⌥L"))
         let quit = action("ออก", #selector(quit(_:)))
         quit.keyEquivalent = "q"
