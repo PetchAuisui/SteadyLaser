@@ -64,7 +64,7 @@ enum DevTools {
     /// Renders the spotlight over a mock slide: each size (left column, medium
     /// shade) and each shade (right column, medium size), one panel apiece.
     static func snapshotSpotlight(to path: String) {
-        let slide = CGSize(width: 640, height: 360)
+        let slide = SampleSlide.size
         let scale: CGFloat = 2
         typealias Panel = (column: Int, row: Int, label: String, radius: CGFloat, shade: CGFloat)
         let panels: [Panel] =
@@ -81,34 +81,11 @@ enum DevTools {
         root.isGeometryFlipped = true
 
         for panel in panels {
-            let back = CALayer()
+            let back = SampleSlide.makeLayer(title: "Quarterly results (\(panel.label))", contentsScale: scale)
+            back.isGeometryFlipped = false   // the root is flipped already
             back.frame = CGRect(x: CGFloat(panel.column) * slide.width, y: CGFloat(panel.row) * slide.height,
                                 width: slide.width, height: slide.height)
-            back.backgroundColor = NSColor.white.cgColor
-            back.masksToBounds = true
             root.addSublayer(back)
-
-            // A fake slide: title, a few bullet bars and a chart.
-            let title = CATextLayer()
-            title.string = "Quarterly results (\(panel.label))"
-            title.fontSize = 30
-            title.foregroundColor = NSColor(white: 0.1, alpha: 1).cgColor
-            title.contentsScale = scale
-            title.frame = CGRect(x: 40, y: 28, width: 560, height: 40)
-            back.addSublayer(title)
-            for row in 0..<4 {
-                let bar = CALayer()
-                bar.backgroundColor = NSColor(white: 0.55, alpha: 1).cgColor
-                bar.frame = CGRect(x: 40, y: 100 + CGFloat(row) * 44, width: [260, 220, 280, 180][row], height: 14)
-                back.addSublayer(bar)
-            }
-            for col in 0..<4 {
-                let h = [90, 140, 120, 190][col]
-                let bar = CALayer()
-                bar.backgroundColor = [NSColor.systemBlue, .systemGreen, .systemOrange, .systemRed][col].cgColor
-                bar.frame = CGRect(x: 380 + CGFloat(col) * 56, y: 300 - CGFloat(h), width: 40, height: CGFloat(h))
-                back.addSublayer(bar)
-            }
 
             let r = LaserRenderer()
             r.configure(kind: .spotlight, style: .comet, radius: LaserSize.medium.radius,

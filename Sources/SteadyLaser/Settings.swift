@@ -23,6 +23,14 @@ enum PointerKind: String, CaseIterable {
         case .spotlight: "สปอตไลต์ หรี่จอรอบวงกลม (Spotlight)"
         }
     }
+
+    /// For a segment in the settings window.
+    var shortTitle: String {
+        switch self {
+        case .laser: "เลเซอร์"
+        case .spotlight: "สปอตไลต์"
+        }
+    }
 }
 
 /// How the laser dot looks.
@@ -34,6 +42,15 @@ enum LaserStyle: String, CaseIterable {
         case .dot: "จุด (Dot)"
         case .glow: "เรืองแสง (Glow)"
         case .comet: "ดาวหาง มีหาง (Comet)"
+        }
+    }
+
+    /// For a segment in the settings window.
+    var shortTitle: String {
+        switch self {
+        case .dot: "จุด"
+        case .glow: "เรืองแสง"
+        case .comet: "ดาวหาง"
         }
     }
 }
@@ -161,6 +178,15 @@ enum Stability: String, CaseIterable {
         }
     }
 
+    /// For a segment in the settings window.
+    var shortTitle: String {
+        switch self {
+        case .low: "ต่ำ"
+        case .medium: "กลาง"
+        case .high: "สูง"
+        }
+    }
+
     var minCutoff: Double {
         switch self {
         case .low: 4.0
@@ -182,10 +208,16 @@ enum Stability: String, CaseIterable {
 final class Settings {
     static let shared = Settings()
 
+    /// `defaults` other than the standard ones keep a snapshot or a test off
+    /// the user's own settings.
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
     /// Called after any setting changes.
     var onChange: (() -> Void)?
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     private func value<T: RawRepresentable>(_ key: String, _ fallback: T) -> T where T.RawValue == String {
         guard let raw = defaults.string(forKey: key), let v = T(rawValue: raw) else { return fallback }

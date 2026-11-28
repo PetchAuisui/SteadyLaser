@@ -59,6 +59,11 @@ final class LaserController {
         windows.removeAll()
     }
 
+    /// Where on screen the laser stays hidden unless the laser button shows
+    /// it: the settings window, so the spotlight doesn't dim it while it's
+    /// being used. Screen coordinates, like `NSEvent.mouseLocation`.
+    var quietArea: (() -> CGRect?)?
+
     /// Settings changed: restyle layers and make sure we're running.
     func settingsChanged() {
         windows.forEach { $0.laserView.applyStyle() }
@@ -233,12 +238,18 @@ final class LaserController {
         }
         lastRaw = raw
 
+        let inQuietArea = quietArea?()?.contains(NSEvent.mouseLocation) ?? false
+
         let target: CGFloat
-        switch s.mode {
-        case .off: target = 0
-        case .always: target = 1
-        case .hold: target = buttonHeld ? 1 : 0
-        case .moving: target = (buttonHeld || (now - lastMoveTime) < s.idleDelay) ? 1 : 0
+        if inQuietArea && !buttonHeld {
+            target = 0
+        } else {
+            switch s.mode {
+            case .off: target = 0
+            case .always: target = 1
+            case .hold: target = buttonHeld ? 1 : 0
+            case .moving: target = (buttonHeld || (now - lastMoveTime) < s.idleDelay) ? 1 : 0
+            }
         }
 
         // Fade in quickly, fade out gently.
