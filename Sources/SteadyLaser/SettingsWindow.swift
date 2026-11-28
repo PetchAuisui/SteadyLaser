@@ -2,9 +2,12 @@ import AppKit
 import SwiftUI
 
 /// Everything in the ◉ menu, in a window laid out like System Settings.
-/// Opened from the menu (ตั้งค่า…, ⌘,) or by opening the app again.
+/// It opens with the app, from the menu (ตั้งค่า…, ⌘,) and when the app is
+/// opened again. While it's open the app is an ordinary one, in the Dock
+/// and ⌘Tab, so the window can't get lost behind others; once it's closed
+/// the app goes back to living in the menu bar.
 @MainActor
-final class SettingsWindow {
+final class SettingsWindow: NSObject, NSWindowDelegate {
     private let model: AppModel
     private var window: NSWindow?
 
@@ -15,8 +18,14 @@ final class SettingsWindow {
     func show() {
         let w = window ?? makeWindow()
         window = w
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         w.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.deactivate()   // hand the menu bar back to the app underneath
     }
 
     /// The window's frame in screen coordinates, while it's on screen.
@@ -34,6 +43,7 @@ final class SettingsWindow {
         w.setContentSize(NSSize(width: 560, height: 800))
         w.contentMinSize = NSSize(width: 480, height: 420)
         w.isReleasedWhenClosed = false
+        w.delegate = self
         w.center()
         w.setFrameAutosaveName("Settings")   // puts it back where it was last time
         return w

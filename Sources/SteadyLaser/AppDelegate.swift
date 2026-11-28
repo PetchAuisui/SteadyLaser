@@ -51,10 +51,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bindLaserButton()
         refresh()
         controller.start()
+
+        // Opened by the user: show what the app does and how it's set up.
+        // Opened by macOS at login: stay quietly in the menu bar.
+        if !launchedAsLoginItem { settingsWindow.show() }
+    }
+
+    /// Whether macOS opened the app as a login item, read from the event
+    /// that launched it.
+    private var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventID == kAEOpenApplication
+        else { return false }
+        return event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     /// Opening the app again (Finder, Spotlight, Launchpad) while it runs
-    /// shows the settings window: there is no other window to show.
+    /// shows the settings window too.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         settingsWindow.show()
         return false
