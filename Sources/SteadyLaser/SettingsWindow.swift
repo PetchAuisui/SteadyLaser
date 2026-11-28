@@ -31,7 +31,7 @@ final class SettingsWindow {
         let w = NSWindow(contentViewController: hosting)
         w.title = "ตั้งค่า Steady Laser"
         w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        w.setContentSize(NSSize(width: 560, height: 720))
+        w.setContentSize(NSSize(width: 560, height: 800))
         w.contentMinSize = NSSize(width: 480, height: 420)
         w.isReleasedWhenClosed = false
         w.center()
@@ -47,6 +47,15 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    LaserPreview(look: LaserPreview.Look(settings))
+                        .aspectRatio(SampleSlide.size.width / SampleSlide.size.height, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.separator))
+                    Text("สไลด์ตัวอย่างย่อจากขนาดจอหลัก ตัวชี้จึงเล็กลงในสัดส่วนเดียวกัน เลื่อนเมาส์บนภาพเพื่อลองชี้")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Picker(selection: bind(\.kind)) {
                     ForEach(PointerKind.allCases, id: \.self) { Text($0.shortTitle).tag($0) }
                 } label: {
