@@ -6,6 +6,7 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = Settings.shared
     private let model = AppModel()
+    private lazy var settingsWindow = SettingsWindow(model: model)
     private let controller = LaserController()
     private let capture = ButtonCapture()
     private var statusItem: NSStatusItem!
@@ -44,9 +45,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.settings.kind = (self.settings.kind == .laser) ? .spotlight : .laser
         }
 
+        installMainMenu()
         bindLaserButton()
         refresh()
         controller.start()
+    }
+
+    /// Opening the app again (Finder, Spotlight, Launchpad) while it runs
+    /// shows the settings window: there is no other window to show.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        settingsWindow.show()
+        return false
+    }
+
+    @objc private func openSettings(_ sender: Any?) {
+        settingsWindow.show()
+    }
+
+    /// Never on screen (menu bar app), but gives the settings window the
+    /// usual keys: ⌘, ⌘W ⌘M ⌘Q.
+    private func installMainMenu() {
+        let app = NSMenu()
+        let open = action("ตั้งค่า…", #selector(openSettings(_:)))
+        open.keyEquivalent = ","
+        app.addItem(open)
+        app.addItem(.separator())
+        app.addItem(NSMenuItem(title: "ออก", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        let window = NSMenu(title: "หน้าต่าง")
+        window.addItem(NSMenuItem(title: "ปิด", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        window.addItem(NSMenuItem(title: "ย่อ", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+
+        let main = NSMenu()
+        for sub in [app, window] {
+            let item = NSMenuItem()
+            item.submenu = sub
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -323,6 +359,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(login)
 
         menu.addItem(.separator())
+        let open = action("ตั้งค่า…", #selector(openSettings(_:)))
+        open.keyEquivalent = ","
+        menu.addItem(open)
         menu.addItem(label("เปิด/ปิดเลเซอร์: ⌃⌥L"))
         let quit = action("ออก", #selector(quit(_:)))
         quit.keyEquivalent = "q"

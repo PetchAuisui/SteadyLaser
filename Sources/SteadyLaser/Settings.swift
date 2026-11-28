@@ -23,6 +23,14 @@ enum PointerKind: String, CaseIterable {
         case .spotlight: "สปอตไลต์ หรี่จอรอบวงกลม (Spotlight)"
         }
     }
+
+    /// For a segment in the settings window.
+    var shortTitle: String {
+        switch self {
+        case .laser: "เลเซอร์"
+        case .spotlight: "สปอตไลต์"
+        }
+    }
 }
 
 /// How the laser dot looks.
@@ -34,6 +42,15 @@ enum LaserStyle: String, CaseIterable {
         case .dot: "จุด (Dot)"
         case .glow: "เรืองแสง (Glow)"
         case .comet: "ดาวหาง มีหาง (Comet)"
+        }
+    }
+
+    /// For a segment in the settings window.
+    var shortTitle: String {
+        switch self {
+        case .dot: "จุด"
+        case .glow: "เรืองแสง"
+        case .comet: "ดาวหาง"
         }
     }
 }
@@ -158,6 +175,15 @@ enum Stability: String, CaseIterable {
         case .low: "ต่ำ (ตอบสนองไว)"
         case .medium: "กลาง"
         case .high: "สูง (นิ่งที่สุด)"
+        }
+    }
+
+    /// For a segment in the settings window.
+    var shortTitle: String {
+        switch self {
+        case .low: "ต่ำ"
+        case .medium: "กลาง"
+        case .high: "สูง"
         }
     }
 
