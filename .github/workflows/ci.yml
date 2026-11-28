@@ -100,3 +100,58 @@ jobs:
           name: SteadyLaser-app
           path: SteadyLaser.zip
           retention-days: 14
+
+  sanitizers-and-coverage:
+    name: Sanitizers and coverage
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Memory errors (use after free, overflows), data races, and undefined
+      # behaviour that the tests trip over without failing. Each runs even if
+      # the one before it failed.
+      - name: Unit tests, address sanitizer
+        run: swift test --sanitize=address
+
+      - name: Unit tests, thread sanitizer
+        if: success() || failure()
+        run: swift test --sanitize=thread
+
+      - name: Unit tests, undefined behaviour sanitizer
+        if: success() || failure()
+        run: swift test --sanitize=undefined
+
+      - name: Unit tests with coverage
+        if: success() || failure()
+        run: swift test --enable-code-coverage
+
+      - name: Coverage report
+        if: success() || failure()
+        run: |
+          BIN=$(swift build --show-bin-path)
+          XCTEST=$(find "$BIN" -maxdepth 1 -name '*.xctest' | head -1)
+          EXE="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
+          PROFILE="$BIN/codecov/default.profdata"
+          IGNORE='(\.build|Tests)/'
+          xcrun llvm-cov report "$EXE" -instr-profile "$PROFILE" -ignore-filename-regex="$IGNORE" | tee coverage.txt
+          xcrun llvm-cov export "$EXE" -instr-profile "$PROFILE" -ignore-filename-regex="$IGNORE" -format=lcov > coverage.lcov
+          {
+            echo "### Unit test coverage"
+            echo
+            echo "Lines of app code the unit tests run. The menu, windows and layers are checked by rendering snapshots instead."
+            echo
+            echo "| File | Lines | Covered |"
+            echo "|---|---:|---:|"
+            awk 'NR > 2 && $1 !~ /^-+$/ { printf "| %s | %s | %s |\n", $1, $8, $10 }' coverage.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: |
+            coverage.txt
+            coverage.lcov
+          retention-days: 14
