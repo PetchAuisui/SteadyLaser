@@ -68,6 +68,50 @@ jobs:
       - name: Build app bundle
         run: ./build.sh
 
+      - name: Check app bundle
+        run: |
+          APP="build/Steady Laser.app"
+          PLIST="$APP/Contents/Info.plist"
+          info() { /usr/libexec/PlistBuddy -c "Print :$1" "$PLIST"; }
+          plutil -lint "$PLIST"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          for key in CFBundleIdentifier CFBundleExecutable CFBundleName CFBundleShortVersionString \
+                     CFBundleVersion CFBundleIconFile LSMinimumSystemVersion LSUIElement; do
+            info "$key" >/dev/null || { echo "::error file=Resources/Info.plist::Info.plist has no $key"; exit 1; }
+          done
+          EXE="$APP/Contents/MacOS/$(info CFBundleExecutable)"
+          [ -x "$EXE" ] || { echo "::error::$EXE is missing or not executable"; exit 1; }
+          [ -s "$APP/Contents/Resources/$(info CFBundleIconFile).icns" ] || { echo "::error::The app icon is missing"; exit 1; }
+          # The binary mustn't need a newer macOS than the bundle promises:
+          # Package.swift's platform and Info.plist have to agree.
+          promised=$(info LSMinimumSystemVersion)
+          needed=$(vtool -show-build "$EXE" | awk '$1 == "minos" { print $2; exit }')
+          echo "Info.plist promises macOS $promised; the binary needs macOS $needed"
+          [ "$needed" = "$promised" ] || {
+            echo "::error file=Resources/Info.plist::The binary needs macOS $needed but Info.plist says $promised. Keep Package.swift and Info.plist in step."
+            exit 1
+          }
+
+      - name: Launch the app
+        run: |
+          APP="build/Steady Laser.app"
+          defaults write local.steadylaser debugLog -bool true
+          "$APP/Contents/MacOS/SteadyLaser" > launch.log 2>&1 &
+          pid=$!
+          sleep 10
+          if ! kill -0 "$pid" 2>/dev/null; then
+            status=0
+            wait "$pid" || status=$?
+            echo "::error::The app quit within 10 seconds of launching (exit status $status)"
+            cat launch.log
+            cat ~/Library/Logs/DiagnosticReports/SteadyLaser* 2>/dev/null || true
+            exit 1
+          fi
+          kill "$pid"
+          wait "$pid" 2>/dev/null || true
+          echo "Still running after 10 seconds. Its log:"
+          cat ~/Library/Logs/SteadyLaser.log 2>/dev/null || echo "(nothing logged)"
+
       - name: Render snapshots
         run: |
           APP="build/Steady Laser.app/Contents/MacOS/SteadyLaser"
@@ -139,7 +183,7 @@ jobs:
           {
             echo "### Unit test coverage"
             echo
-            echo "Lines of app code the unit tests run. The menu, windows and layers are checked by rendering snapshots instead."
+            echo "Lines of app code the unit tests run. The menu, windows and layers are checked by launching the app and rendering snapshots instead."
             echo
             echo "| File | Lines | Covered |"
             echo "|---|---:|---:|"
