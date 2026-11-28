@@ -45,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.settings.kind = (self.settings.kind == .laser) ? .spotlight : .laser
         }
 
+        controller.quietArea = { [weak self] in self?.settingsWindow.visibleFrame }
+
         installMainMenu()
         bindLaserButton()
         refresh()
