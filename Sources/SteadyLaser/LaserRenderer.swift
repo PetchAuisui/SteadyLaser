@@ -52,8 +52,11 @@ final class LaserRenderer {
         container.addSublayer(spot)
     }
 
+    /// `radius` is the laser dot's, `spotlightRadius` the spotlight circle's.
     /// `canvas` is the size of the screen the laser is drawn on.
-    func configure(kind: PointerKind, style: LaserStyle, radius r: CGFloat, color: NSColor, scale: CGFloat, canvas: CGSize) {
+    func configure(kind: PointerKind, style: LaserStyle, radius r: CGFloat,
+                   spotlightRadius hole: CGFloat = SpotlightSize.medium.radius,
+                   color: NSColor, scale: CGFloat, canvas: CGSize) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -71,7 +74,6 @@ final class LaserRenderer {
         dim.isHidden = !spotlight
         spot.isHidden = spotlight
         if spotlight {
-            let hole = r * PointerKind.spotlightScale
             let feather = hole * 0.25
             // Reaches every corner of the screen from any point on it.
             let reach = hypot(canvas.width, canvas.height) + hole + feather
