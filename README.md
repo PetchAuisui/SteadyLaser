@@ -77,8 +77,11 @@ defaults write local.steadylaser debugLog -bool true
 ### Unit test และ CI
 
 - `swift test` ทดสอบตัวกรอง One Euro (ระดับ "กลาง" ต้องลดการสั่นได้เกิน 85% และตามหลังไม่เกิน 15 ms), การบันทึกปุ่มเลเซอร์, การจับคู่รีโมตด้วย vendor ID และจังหวะกด/กดค้าง/กด 2 ครั้ง ของปุ่มเลเซอร์ ด้วยนาฬิกาจำลอง
-- GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) รันทุก pull request และทุกครั้งที่ push เข้า `main` ขั้นตอนคือ build แบบ release, unit test, `--selftest`, สร้าง `.app` ด้วย `./build.sh` และเรนเดอร์ snapshot ทั้งสามแบบ
-- ไฟล์ `SteadyLaser.zip` (แอปที่ sign แบบ ad-hoc) และรูป snapshot ดาวน์โหลดได้จากหน้า run ของ Actions เก็บไว้ 14 วัน
+- GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) รันทุก pull request, ทุกครั้งที่ push เข้า `main` และทุกวันจันทร์ เผื่อ runner หรือ Xcode รุ่นใหม่ทำให้ build พัง มี 3 งาน:
+  - **Build and test** รันบน 4 เครื่อง: macOS 15 ทั้ง Apple silicon และ Intel (Xcode 16), macOS 26 และ Xcode 27 แต่ละเครื่อง build แบบ debug และ release โดยถือ warning เป็น error, รัน unit test และ `--selftest`, สร้าง `.app` แล้วตรวจ bundle (Info.plist, ลายเซ็น, ไอคอน และ macOS ขั้นต่ำของ binary ต้องตรงกับ `LSMinimumSystemVersion`), เปิดแอปจริง 10 วินาทีเพื่อดูว่าไม่ crash และเรนเดอร์ snapshot บน Xcode 27 ตรวจกฎ concurrency ของ Swift 6 แบบครบด้วย
+  - **Sanitizers and coverage** รัน unit test ใต้ address, thread และ undefined behaviour sanitizer แล้ววัด coverage เป็นตารางรายไฟล์ในหน้าสรุปของ run
+  - **Lint** ตรวจ workflow ด้วย actionlint ซึ่งตรวจสคริปต์ใน workflow ด้วย shellcheck
+- ไฟล์ `SteadyLaser.zip` (แอปที่ sign แบบ ad-hoc จาก macOS 26), snapshot ของแต่ละเครื่อง และรายงาน coverage ดาวน์โหลดได้จากหน้า run ของ Actions เก็บไว้ 14 วัน
 
 ## โครงสร้างโค้ด
 
