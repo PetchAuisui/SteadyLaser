@@ -40,12 +40,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let w = NSWindow(contentViewController: hosting)
         w.title = "ตั้งค่า Steady Laser"
         w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        w.setContentSize(NSSize(width: 560, height: 800))
-        w.contentMinSize = NSSize(width: 480, height: 420)
+        w.setContentSize(NSSize(width: 980, height: 640))
         w.isReleasedWhenClosed = false
         w.delegate = self
         w.center()
-        w.setFrameAutosaveName("Settings")   // puts it back where it was last time
+        w.setFrameAutosaveName("SettingsWindow")   // puts it back where it was last time
         return w
     }
 }
@@ -55,82 +54,99 @@ struct SettingsView: View {
     private var settings: Settings { model.settings }
 
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    LaserPreview(look: LaserPreview.Look(settings))
-                        .aspectRatio(SampleSlide.size.width / SampleSlide.size.height, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.separator))
-                    Text("สไลด์ตัวอย่างย่อจากขนาดจอหลัก ตัวชี้จึงเล็กลงในสัดส่วนเดียวกัน เลื่อนเมาส์บนภาพเพื่อลองชี้")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        // Two columns, so the window is wide rather than tall: on the left
+        // how the pointer looks, with the preview right above the settings
+        // that change it; on the right how and when it shows.
+        HStack(alignment: .top, spacing: 0) {
+            Form {
+                pointerSection
+                switch settings.kind {
+                case .laser: laserSection
+                case .spotlight: spotlightSection
                 }
-                Picker(selection: bind(\.kind)) {
-                    ForEach(PointerKind.allCases, id: \.self) { Text($0.shortTitle).tag($0) }
-                } label: {
-                    Text("ตัวชี้")
-                    Text("ระหว่างนำเสนอ กดปุ่ม Pointer 2 ครั้ง เว้นราวครึ่งวินาที เพื่อสลับ")
-                }
-                .pickerStyle(.segmented)
             }
+            .formStyle(.grouped)
 
-            switch settings.kind {
-            case .laser: laserSection
-            case .spotlight: spotlightSection
+            Form {
+                behaviorSections
             }
+            .formStyle(.grouped)
+        }
+        .frame(minWidth: 860, minHeight: 480)
+    }
 
-            Section("การแสดงผล") {
-                Picker(selection: bind(\.mode)) {
-                    ForEach(LaserMode.allCases, id: \.self) { Text($0.title).tag($0) }
-                } label: {
-                    Text("โหมด")
-                    Text("เปิดหรือปิดได้ทุกเมื่อด้วย ⌃⌥L")
-                }
-                Picker(selection: bind(\.stability)) {
-                    ForEach(Stability.allCases, id: \.self) { Text($0.shortTitle).tag($0) }
-                } label: {
-                    Text("ความนิ่ง")
-                    Text("ยิ่งสูง มือสั่นยิ่งไม่เห็น แต่จุดตามมือช้าลงเล็กน้อย")
-                }
-                .pickerStyle(.segmented)
+    private var pointerSection: some View {
+        Section("ตัวชี้") {
+            VStack(alignment: .leading, spacing: 6) {
+                LaserPreview(look: LaserPreview.Look(settings))
+                    .aspectRatio(SampleSlide.size.width / SampleSlide.size.height, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.separator))
+                Text("สไลด์ตัวอย่างย่อจากขนาดจอหลัก ตัวชี้จึงเล็กลงในสัดส่วนเดียวกัน เลื่อนเมาส์บนภาพเพื่อลองชี้")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            Picker(selection: bind(\.kind)) {
+                ForEach(PointerKind.allCases, id: \.self) { Text($0.shortTitle).tag($0) }
+            } label: {
+                Text("แสดงเป็น")
+                Text("ระหว่างนำเสนอ กดปุ่ม Pointer 2 ครั้ง เว้นราวครึ่งวินาที เพื่อสลับ")
+            }
+            .pickerStyle(.segmented)
+        }
+    }
 
-            Section("รีโมต") {
-                LabeledContent {
-                    HStack(spacing: 8) {
-                        Text(settings.laserButton?.title ?? "Pointer ของรีโมต Norwii")
-                        if settings.laserButton != nil {
-                            Button("ใช้ Pointer ของ Norwii") { model.clearLaserButton() }
-                        }
-                        Button("เปลี่ยน…") { model.learnLaserButton() }
+    @ViewBuilder
+    private var behaviorSections: some View {
+        Section("การแสดงผล") {
+            Picker(selection: bind(\.mode)) {
+                ForEach(LaserMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            } label: {
+                Text("โหมด")
+                Text("เปิดหรือปิดได้ทุกเมื่อด้วย ⌃⌥L")
+            }
+            Picker(selection: bind(\.stability)) {
+                ForEach(Stability.allCases, id: \.self) { Text($0.shortTitle).tag($0) }
+            } label: {
+                Text("ความนิ่ง")
+                Text("ยิ่งสูง มือสั่นยิ่งไม่เห็น แต่จุดตามมือช้าลงเล็กน้อย")
+            }
+            .pickerStyle(.segmented)
+        }
+
+        Section("รีโมต") {
+            LabeledContent {
+                HStack(spacing: 8) {
+                    Text(settings.laserButton?.title ?? "Pointer ของรีโมต Norwii")
+                    if settings.laserButton != nil {
+                        Button("ใช้ Pointer ของ Norwii") { model.clearLaserButton() }
                     }
-                } label: {
-                    Text("ปุ่มเลเซอร์")
-                    Text("ปิดแอป Norwii Presenter ก่อนใช้ เพราะแอปนั้นย้ายเคอร์เซอร์เองและจะแย่งกัน")
+                    Button("เปลี่ยน…") { model.learnLaserButton() }
                 }
-                if let error = model.laserButtonError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                }
+            } label: {
+                Text("ปุ่มเลเซอร์")
+                Text("ปิดแอป Norwii Presenter ก่อนใช้ เพราะแอปนั้นย้ายเคอร์เซอร์เองและจะแย่งกัน")
             }
-
-            Section("เคอร์เซอร์") {
-                Toggle("ซ่อนเคอร์เซอร์ตอนเลเซอร์แสดง", isOn: bind(\.hideCursor))
-                Toggle(isOn: bind(\.detachCursor)) {
-                    Text("ตอนกดปุ่มเลเซอร์ เมาส์ไม่ชี้หรือคลิกอะไร")
-                    Text("ปุ่ม ลิงก์ และ Dock ข้างใต้จะไม่เห็นเมาส์จนกว่าจะปล่อยปุ่ม")
-                }
-            }
-
-            Section {
-                Toggle("เปิดอัตโนมัติตอนเข้าเครื่อง", isOn: Binding(
-                    get: { model.launchesAtLogin },
-                    set: { _ in model.toggleLaunchAtLogin() }
-                ))
+            if let error = model.laserButtonError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
             }
         }
-        .formStyle(.grouped)
+
+        Section("เคอร์เซอร์") {
+            Toggle("ซ่อนเคอร์เซอร์ตอนเลเซอร์แสดง", isOn: bind(\.hideCursor))
+            Toggle(isOn: bind(\.detachCursor)) {
+                Text("ตอนกดปุ่มเลเซอร์ เมาส์ไม่ชี้หรือคลิกอะไร")
+                Text("ปุ่ม ลิงก์ และ Dock ข้างใต้จะไม่เห็นเมาส์จนกว่าจะปล่อยปุ่ม")
+            }
+        }
+
+        Section {
+            Toggle("เปิดอัตโนมัติตอนเข้าเครื่อง", isOn: Binding(
+                get: { model.launchesAtLogin },
+                set: { _ in model.toggleLaunchAtLogin() }
+            ))
+        }
     }
 
     private var laserSection: some View {

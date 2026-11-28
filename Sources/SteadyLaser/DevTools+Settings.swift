@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 extension DevTools {
-    /// Renders the settings window offscreen, side by side: Laser in light
-    /// mode and Spotlight in dark mode. Uses its own defaults, not the user's.
+    /// Renders the settings window offscreen, one above the other: Laser in
+    /// light mode and Spotlight in dark mode. Uses its own defaults, not the user's.
     static func snapshotSettings(to path: String) {
         let domain = "local.steadylaser.snapshot"
         UserDefaults.standard.removePersistentDomain(forName: domain)
@@ -11,7 +11,7 @@ extension DevTools {
         guard let defaults = UserDefaults(suiteName: domain) else { return }
         let settings = Settings(defaults: defaults)
 
-        let size = NSSize(width: 560, height: 1320)
+        let size = NSSize(width: 980, height: 640)
         var images: [NSBitmapImageRep] = []
         for (kind, appearance) in [(PointerKind.laser, NSAppearance.Name.aqua), (.spotlight, .darkAqua)] {
             settings.kind = kind
@@ -27,19 +27,19 @@ extension DevTools {
         }
 
         let gap = 24
-        let w = images.map(\.pixelsWide).reduce(0, +) + gap * (images.count - 1)
-        let h = images.map(\.pixelsHigh).max() ?? 0
+        let w = images.map(\.pixelsWide).max() ?? 0
+        let h = images.map(\.pixelsHigh).reduce(0, +) + gap * (images.count - 1)
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
         ctx.setFillColor(NSColor(white: 0.5, alpha: 1).cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-        var x = 0
+        var top = h
         for rep in images {
             if let cg = rep.cgImage {
-                ctx.draw(cg, in: CGRect(x: x, y: h - rep.pixelsHigh, width: rep.pixelsWide, height: rep.pixelsHigh))
+                ctx.draw(cg, in: CGRect(x: 0, y: top - rep.pixelsHigh, width: rep.pixelsWide, height: rep.pixelsHigh))
             }
-            x += rep.pixelsWide + gap
+            top -= rep.pixelsHigh + gap
         }
         guard let image = ctx.makeImage(),
               let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
