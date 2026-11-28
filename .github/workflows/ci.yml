@@ -15,22 +15,52 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: Build, test, package
-    runs-on: macos-latest
-    timeout-minutes: 20
+    name: Build and test (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      # One toolchain failing shouldn't hide how the others did.
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest macOS and Xcode (16) GitHub still runs. The app
+          # supports macOS 14 and later.
+          - name: macOS 15, Apple silicon
+            runner: macos-15
+          # Intel Macs run macOS 15 too.
+          - name: macOS 15, Intel
+            runner: macos-15-intel
+          # macos-latest. The app download comes from here.
+          - name: macOS 26
+            runner: macos-26
+            publish: true
+          # The newest Xcode, the one the app is developed with. Also checks
+          # the code against Swift 6's complete concurrency rules.
+          - name: Xcode 27
+            runner: xcode-27
+            strict: true
     steps:
       - uses: actions/checkout@v7
 
       - name: Toolchain
         run: |
           sw_vers
+          uname -m
+          xcodebuild -version
           swift --version
 
-      - name: Build (release)
-        run: swift build -c release
+      - name: Build (debug, warnings are errors)
+        run: swift build --build-tests -Xswiftc -warnings-as-errors
+
+      - name: Swift 6 concurrency checks
+        if: matrix.strict
+        run: swift build --build-tests -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
 
       - name: Unit tests
-        run: swift test
+        run: swift test -Xswiftc -warnings-as-errors
+
+      - name: Build (release, warnings are errors)
+        run: swift build -c release -Xswiftc -warnings-as-errors
 
       - name: Filter self-test
         run: .build/release/SteadyLaser --selftest
@@ -46,22 +76,27 @@ jobs:
           "$APP" --snapshot-spotlight snapshots/spotlight.png
           "$APP" --snapshot-capture snapshots/capture-panel.png
           for f in styles spotlight capture-panel; do
-            test -s "snapshots/$f.png" || { echo "::error::snapshots/$f.png was not written"; exit 1; }
+            [ "$(file -b --mime-type "snapshots/$f.png")" = image/png ] \
+              || { echo "::error::snapshots/$f.png is missing or not a PNG"; exit 1; }
           done
 
+      # Fonts and controls draw a little differently on each macOS, so each
+      # runner keeps its own set.
+      - name: Upload snapshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapshots-${{ matrix.runner }}
+          path: snapshots/
+          retention-days: 14
+
       - name: Zip app
+        if: matrix.publish
         run: ditto -c -k --keepParent "build/Steady Laser.app" "SteadyLaser.zip"
 
       - name: Upload app
+        if: matrix.publish
         uses: actions/upload-artifact@v7
         with:
           name: SteadyLaser-app
           path: SteadyLaser.zip
-          retention-days: 14
-
-      - name: Upload snapshots
-        uses: actions/upload-artifact@v7
-        with:
-          name: snapshots
-          path: snapshots/
           retention-days: 14
